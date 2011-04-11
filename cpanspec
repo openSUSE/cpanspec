@@ -306,6 +306,7 @@ sub fetch($$) {
         $fh->close();
 
         my $last_modified=$response->last_modified;
+        verbose("Set last modified to $last_modified");
         utime(time, $last_modified, $file) if ($last_modified);
     } elsif ($response->code eq "304") {
         verbose("$file is up to date.");
@@ -343,6 +344,7 @@ sub update_packages() {
 sub get_file($) {
     $file=shift;
     # Look up $file in 02packages.details.txt.
+    verbose("Get file $file");
     update_packages();
     $packages=Parse::CPAN::Packages->new($pkgdetails)
         if (!defined($packages));
@@ -379,6 +381,7 @@ sub get_source($) {
     # keep things happy if we get "Foo-Bar" instead of "Foo::Bar"
     $file =~ s/-/::/g;
 
+    verbose("Get source $file");
     # Look up $file in 02packages.details.txt.
     update_packages();
     $packages=Parse::CPAN::Packages->new($pkgdetails)
@@ -790,7 +793,7 @@ for my $ofile (@args) {
 
     my $url="http://search.cpan.org/dist/$name/";
 
-    get_source($name) if(!defined $source);
+    get_source($name) if(!defined $source && -d dirname($pkgdetails));
 
     $content = get_content(
             archive     => $archive,
@@ -935,12 +938,6 @@ for my $ofile (@args) {
         %build_requires=%{$meta->{build_requires}} if ($meta->{build_requires});
         %requires=%{$meta->{requires}} if ($meta->{requires});
         %recommends=%{$meta->{recommends}} if ($meta->{recommends});
-        if ($meta->{recommends}) {
-            for my $dep (keys(%{$meta->{recommends}})) {
-                $requires{$dep}=$requires{$dep}
-                    || $meta->{recommends}->{$dep};
-            }
-        }
 
         # FIXME - I'm not sure this is sufficient...
         if ($meta->{script_files} or $meta->{scripts}) {
@@ -971,8 +968,6 @@ for my $ofile (@args) {
                 $license="MPL";
             } elsif ($meta->{license} =~ /^open_source$/i) {
                 $license="OSI-Approved"; # rpmlint will complain
-            } elsif ($meta->{license} =~ /^unrestricted$/i) {
-                $license="Distributable";
             } elsif ($meta->{license} =~ /^restrictive$/i) {
                 $license="Non-distributable";
                 warn "License is 'restrictive'."
@@ -985,13 +980,6 @@ for my $ofile (@args) {
         SKIP:
     }
 
-    if (my @licenses=grep /license|copyright|copying/i, @doc) {
-        if (!$license) {
-            $license="Distributable, see @licenses";
-        } elsif ($license=~/^(OSI-Approved|Distributable|Non-distributable)$/) {
-            $license.=", see @licenses";
-        }
-    }
     if (!defined($license)) {
        get_license($content);
        if ($license =~ /under the same terms as Perl itself/ || 
@@ -1102,9 +1090,9 @@ License:        $license
 Summary:        $summary
 Url:            $url
 Group:          Development/Libraries/Perl
-#Source:         $source
-Source:         \%{cpan_name}-\%{version}.tar$ext
 END
+    print $spec "#Source: $source\n" if ($source);
+    print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext"
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
     print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
 
