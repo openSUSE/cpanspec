@@ -13,7 +13,7 @@
 # $Id: cpanspec,v 1.67 2009/01/16 20:35:17 stevenpritchard Exp $
 
 our $NAME="cpanspec";
-our $VERSION='1.78.02';
+our $VERSION='1.78';
 
 =head1 NAME
 
