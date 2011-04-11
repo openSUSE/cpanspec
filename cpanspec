@@ -577,7 +577,7 @@ sub get_license($) {
     HEAD1:
     foreach my $head1 ($pom->head1) {
 
-        next HEAD1 unless $head1->title =~ /LICENSE/;
+        next HEAD1 unless $head1->title =~ /LICENSE/i || $head1->title =~ /COPYRIGHT/i ;
 
         my $pom = $head1->content;
         $license = $pom->present('Pod::POM::View::Text');
@@ -590,12 +590,13 @@ sub get_license($) {
             push(@lines, $line);
         }
 
-        $license = join "\n", @lines;
+        $license = join " ", @lines;
+        $license =~ s,\s+, ,g;
 
         # return...
         return $license;
     }
-    return $license='sorry, no license found';
+    return $license=undef;
 
 }
 
