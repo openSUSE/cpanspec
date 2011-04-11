@@ -878,7 +878,7 @@ for my $ofile (@args) {
     my $license="";
 
     my $scripts=0;
-    my (%build_requires,%requires);
+    my (%build_requires,%requires,%recommends);
     my ($yml,$meta);
     if (grep /^META\.yml$/, @files
         and $yml=extract($archive, $type, "$path/META.yml")) {
@@ -892,6 +892,7 @@ for my $ofile (@args) {
 
         %build_requires=%{$meta->{build_requires}} if ($meta->{build_requires});
         %requires=%{$meta->{requires}} if ($meta->{requires});
+        %recommends=%{$meta->{recommends}} if ($meta->{recommends});
         if ($meta->{recommends}) {
             for my $dep (keys(%{$meta->{recommends}})) {
                 $requires{$dep}=$requires{$dep}
@@ -1066,8 +1067,8 @@ END
         $build_requires{$dep}=$build_requires{$dep} || $requires{$dep};
     }
 
-
     for my $dep (sort(keys(%build_requires))) {
+        next if ($dep eq 'perl');
         if (exists($corelist{$dep})) {
             next if (!$compat);
         } elsif ($follow) {
@@ -1107,6 +1108,15 @@ END
     for my $prov (@add_provides) {
         printf $spec "%-16s%s\n", "Provides:", $prov;
     }
+    for my $dep (sort(keys(%recommends))) {
+        next if ($dep eq 'perl');
+        next if (!$compat and exists($corelist{$dep}));
+        printf $spec "%-16s%s", "Recommends:", "perl($dep)";
+        print $spec (" >= " . $requires{$dep}) if ($requires{$dep});
+        print $spec "\n";
+    }
+
+ 
 
     if (@filter_requires) {
         print $spec <<END
