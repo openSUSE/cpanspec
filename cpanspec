@@ -691,7 +691,7 @@ while (my $provides=<$rpm>) {
     chomp $provides;
 
     if ($provides=~/^perl\(([^\)]+)\)(?:\s+=\s+(\S+))\s*$/) {
-        $corelist{$1}=defined($2) ? $2 : 0;
+        #$corelist{$1}=defined($2) ? $2 : 0;
     }
 }
 
@@ -805,7 +805,6 @@ for my $ofile (@args) {
     get_description($content) if(!defined($description));
 
     get_summary($content,$module) if (!defined($summary));
-    $description=$summary if (!defined($description));
     
     get_author($content) if (!defined($author));
 
@@ -839,6 +838,9 @@ for my $ofile (@args) {
             and $_ ne "pm_to_blib"
             and $_ ne "install.sh"
             } @files;
+
+    # special subdir
+    push(@doc, "examples") if grep(/examples\//, @files);
 
     my $date=strftime("%a %b %d %Y", localtime);
 
@@ -922,6 +924,12 @@ for my $ofile (@args) {
         if ($@) {
             warn "Error parsing $path/META.yml: $@";
             goto SKIP;
+        }
+
+        if ($meta->{abstract}) {
+          my $abstract=$meta->{abstract};
+          $summary=$abstract if (!defined($summary));
+          $description=$summary if (!defined($description));
         }
 
         %build_requires=%{$meta->{build_requires}} if ($meta->{build_requires});
