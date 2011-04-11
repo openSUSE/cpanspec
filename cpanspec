@@ -1057,9 +1057,7 @@ END
     }
 
     print $spec <<END;
-%if 0%{?suse_version} < 1120
 BuildRequires:  perl-macros
-%endif
 END
 
     for my $dep (keys(%requires)) {
