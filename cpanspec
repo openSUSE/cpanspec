@@ -1106,13 +1106,12 @@ END
     if ($usebuildpl) {
         print $spec <<END;
 \%{__perl} Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
-./Build
+./Build build flags=\%{?_smp_mflags}
 
 END
     } else {
         print $spec <<END;
 \%{__perl} Makefile.PL INSTALLDIRS=vendor@{[$noarch ? '' : qq{ OPTIMIZE="$macro{optimize}"}]}
-
 END
 
         print $spec
