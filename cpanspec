@@ -223,7 +223,7 @@ our $buildsrpm=0;
 our $buildrpm=0;
 our $verbose=0;
 our $follow=0;
-our $macros=0;
+our $macros=1;
 our $cpan=$ENV{'CPAN'} || "http://www.cpan.org";
 
 our $home=$ENV{'HOME'} || (getpwuid($<))[7];
@@ -1028,8 +1028,6 @@ END
 
     print $spec <<END;
 Name:           $prefix$name
-%define cpan_name $name
-Summary:        $summary
 Version:        $version
 Release:        $release
 END
@@ -1038,30 +1036,25 @@ END
 
     print $spec <<END;
 License:        $license
-Group:          Development/Libraries/Perl
+%define cpan_name $name
+Summary:        $summary
 Url:            $url
+Group:          Development/Libraries/Perl
 #Source:         $source
 Source:         \%{cpan_name}-\%{version}.tar$ext
 END
-
-    printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
-
-    print $spec <<END;
-BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build
-BuildRequires:  perl
-BuildRequires:  perl-macros
-END
-
+    
+    push(@add_buildrequires, "perl");
+    push(@add_buildrequires, "perl-macros");
     if ($usebuildpl) {
-        print $spec <<END;
-BuildRequires:  perl(Module::Build)
-END
+        push(@add_buildrequires, "perl(Module::Build)");
     }
 
     for my $dep (keys(%requires)) {
         next if ($dep eq 'perl');
         $build_requires{$dep}=$build_requires{$dep} || $requires{$dep};
     }
+
 
     for my $dep (sort(keys(%build_requires))) {
         if (exists($corelist{$dep})) {
@@ -1083,13 +1076,9 @@ END
         print $spec "\n";
     }
 
-    for my $dep (@add_buildrequires) {
-        printf $spec "%-16s%s\n", "BuildRequires:", $dep;
+    for my $dep (sort @add_buildrequires) {
+        printf $spec "%-16s%s\n", "BuildRequires:", $dep if (length($dep));
     }
-
-    print $spec <<END;
-%{perl_requires}
-END
 
     for my $dep (sort(keys(%requires))) {
         next if ($dep eq 'perl');
@@ -1126,6 +1115,10 @@ Source99:       $name-filter-provides.sh
 END
     }
 
+    print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
+    printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
+    print $spec "%{perl_requires}\n";
+
     my $buildpath=$path;
     $buildpath=~s/$name/\%{cpan_name}/;
     $buildpath=~s/$version/\%{version}/;
@@ -1133,8 +1126,6 @@ END
 
 \%description
 $description
-
-$authors
 
 \%prep
 \%setup -q@{[($noprefix ? "" : " -n $buildpath")]}
