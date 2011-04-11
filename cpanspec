@@ -1141,14 +1141,38 @@ END
 END
 
     if ($usebuildpl) {
-        print $spec
-            "./Build install destdir=$macro{buildroot} create_packlist=0\n";
+      if ($noarch) {
+        print $spec <<END;
+./Build install destdir=$macro{buildroot} create_packlist=0
+# do not perl_process_packlist (noarch)
+# remove .packlist file
+%{__rm} -rf \$RPM_BUILD_ROOT%perl_vendorarch
+# remove perllocal.pod file
+%{__rm} -rf \$RPM_BUILD_ROOT%perl_archlib
+END
+      } else {
+        print $spec <<END;
+./Build install destdir=$macro{buildroot} create_packlist=0
+%perl_process_packlist
+END
+      }
 
     } else {
+      if ($noarch) {
+        print $spec <<END;
+%perl_make_install
+# do not perl_process_packlist (noarch)
+# remove .packlist file
+%{__rm} -rf \$RPM_BUILD_ROOT%perl_vendorarch
+# remove perllocal.pod file
+%{__rm} -rf \$RPM_BUILD_ROOT%perl_archlib
+END
+      } else {
         print $spec <<END;
 %perl_make_install
 %perl_process_packlist
 END
+      }
     }
 
     print $spec <<END;
@@ -1193,7 +1217,8 @@ END
 
     push(@processed, $module);
 
-    system("osc vc -m 'initial package created by $NAME $VERSION'");
+    system("osc vc -m 'initial package $version
+  * created by $NAME $VERSION'");
 }
 
 # vi: set ai et:
