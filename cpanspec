@@ -628,9 +628,9 @@ for my $file (@args) {
     if ($type eq 'tar') {
         my $f=$file;
         if ($file=~/\.bz2$/) {
-            eval {
-                use IO::Uncompress::Bunzip2;
-            };
+            #eval {
+            #    use IO::Uncompress::Bunzip2;
+            #};
 
             if ($@) {
                 warn "Failed to load IO::Uncompress::Bunzip2: $@\n";
@@ -940,6 +940,28 @@ for my $file (@args) {
     }
 
     print $spec <<END;
+#
+# spec file for package $prefix$name (Version $version)
+#
+# Copyright (c) 2010 SUSE LINUX Products GmbH, Nuernberg, Germany.
+#
+# All modifications and additions to the file contributed by third parties
+# remain the property of their copyright owners, unless otherwise agreed
+# upon. The license for this file, and modifications and additions to the
+# file, is the same license as for the pristine package itself (unless the
+# license for the pristine package is not an Open Source License, in which
+# case the license is the MIT License). An "Open Source License" is a
+# license that conforms to the Open Source Definition (Version 1.9)
+# published by the Open Source Initiative.
+
+# Please submit bugfixes or comments via http://bugs.opensuse.org/
+#
+
+# norootforbuild
+
+END
+
+    print $spec <<END;
 Name:           $prefix$name
 Version:        $version
 Release:        $release
@@ -950,9 +972,8 @@ END
     print $spec <<END;
 Summary:        $summary
 License:        $license
-Url:            $url
 Group:          Development/Libraries/Perl
-Requires:       perl = %{perl_version}
+Url:            $url
 Source:         $source
 BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build
 END
@@ -969,6 +990,12 @@ END
             $build_requires{perl} if $build_requires{perl};
         delete $build_requires{perl};
     }
+
+    print $spec <<END;
+%if 0%{?suse_version} < 1120
+BuildRequires:  perl-macros
+%endif
+END
 
     for my $dep (keys(%requires)) {
         $build_requires{$dep}=$build_requires{$dep} || $requires{$dep};
@@ -996,6 +1023,10 @@ END
     for my $dep (@add_buildrequires) {
         printf $spec "%-16s%s\n", "BuildRequires:", $dep;
     }
+
+    print $spec <<END;
+Requires:       perl = %{perl_version}
+END
 
     for my $dep (sort(keys(%requires))) {
         next if (!$compat and exists($corelist{$dep}));
@@ -1085,9 +1116,20 @@ END
             if ($compat and !$noarch);
 
         print $spec <<END;
-make \%{?_smp_mflags}
+\%{__make} \%{?_smp_mflags}
+
 END
     }
+
+    print $spec <<END;
+\%check@{[($compat ? ' || :' : '')]}
+END
+    if ($usebuildpl) {
+        print $spec "./Build test\n";
+    } else {
+        print $spec "\%{__make} test\n";
+    }
+
 
     print $spec <<END;
 
@@ -1120,22 +1162,13 @@ END
     }
 
     print $spec <<END;
-\%check@{[($compat ? ' || :' : '')]}
-END
-    if ($usebuildpl) {
-        print $spec "./Build test\n";
-    } else {
-        print $spec "make test\n";
-    }
-
-    print $spec <<END;
 
 \%clean
-rm -rf $macro{buildroot}@{[
+\%{__rm} -rf $macro{buildroot}@{[
     (@filter_requires ? ' %{__perl_requires}' : '') .
     (@filter_provides ? ' %{__perl_provides}' : '')]}
 
-\%files -f %name.files
+\%files -f \%{name}.files
 \%defattr(-,root,root,-)
 \%doc @doc
 END
