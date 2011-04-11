@@ -1092,7 +1092,7 @@ Url:            $url
 Group:          Development/Libraries/Perl
 END
     print $spec "#Source: $source\n" if ($source);
-    print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext"
+    print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext\n";
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
     print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
 
