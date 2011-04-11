@@ -388,12 +388,12 @@ sub get_source($) {
     my ($m,$d);
     if ($m=$packages->package($file) and $d=$m->distribution()) {
         $source=$cpan . "/authors/id/" . $d->prefix();
+        $source=~s/$version/\%{version}/;
     } else {
         warn "Failed to parse '$file' or find a module by that name in $pkgdetails, skipping...\n";
         $source='';
         return;
     }
-    $source=~s/$version/\%{version}/;
 }
 
 sub build_rpm($) {
@@ -787,9 +787,11 @@ for my $ofile (@args) {
             and $_ ne "META.json"
             and $_ ne "META.yml"
             and $_ ne "NINJA"
+            and $_ ne "c"
             and $_ ne "configure"
             and $_ ne "config.guess"
             and $_ ne "config.sub"
+            and $_ ne "dist.ini"
             and $_ ne "typemap"
             and $_ ne "bin"
             and $_ ne "lib"
@@ -1048,12 +1050,14 @@ Group:          Development/Libraries/Perl
 #Source:         $source
 Source:         \%{cpan_name}-\%{version}.tar$ext
 END
-    
-    push(@add_buildrequires, "perl");
-    push(@add_buildrequires, "perl-macros");
+    printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
+    print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
+
+    printf $spec "%-16s%s\n", "BuildRequires:", "perl";
     if ($usebuildpl) {
-        push(@add_buildrequires, "perl(Module::Build)");
+        printf $spec "%-16s%s\n", "BuildRequires:", "perl(Module::Build)";
     }
+    printf $spec "%-16s%s\n", "BuildRequires:", "perl-macros";
 
     for my $dep (keys(%requires)) {
         next if ($dep eq 'perl');
@@ -1120,8 +1124,6 @@ Source99:       $name-filter-provides.sh
 END
     }
 
-    print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
-    printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
     print $spec "%{perl_requires}\n";
 
     my $buildpath=$path;
@@ -1231,8 +1233,10 @@ END
 
 \%files -f \%{name}.files
 END
-    print $spec "\%defattr(644,root,root,755)\n";
-    print $spec "%doc @doc\n" if (@doc);
+    if (@doc) {
+       print $spec "\%defattr(644,root,root,755)\n";
+       print $spec "%doc @doc\n";
+    }
 
     if ($scripts) {
         print $spec "\%{_bindir}/*\n";
