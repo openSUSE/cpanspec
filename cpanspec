@@ -715,6 +715,7 @@ for my $file (@args) {
             and $_ ne "MANIFEST.SKIP"
             and $_ ne "INSTALL"
             and $_ ne "SIGNATURE"
+            and $_ ne "META.json"
             and $_ ne "META.yml"
             and $_ ne "NINJA"
             and $_ ne "configure"
@@ -726,6 +727,8 @@ for my $file (@args) {
             and $_ ne "t"
             and $_ ne "inc"
             and $_ ne "autobuild.sh"
+            and $_ ne "perlcriticrc"
+            and $_ ne "perltidyrc"
             and $_ ne "pm_to_blib"
             and $_ ne "install.sh"
             } @files;
