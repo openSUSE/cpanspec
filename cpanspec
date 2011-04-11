@@ -1245,10 +1245,10 @@ END
 
 \%files -f \%{name}.files
 END
-    print $spec "\%defattr(644,root,root,755)\n";
+    print $spec "\%defattr(-,root,root,755)\n";
 
     if (@doc) {
-       print $spec "%doc @doc\n";
+       print $spec "%doc %attr(644,-,-) @doc\n";
     }
 
     if ($scripts) {
