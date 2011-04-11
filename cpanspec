@@ -242,7 +242,7 @@ our @add_provides;
 our @add_buildrequires;
 
 our ($file,$name,$source,$version,$type);
-our ($content,$summary,$description,$author);
+our ($content,$summary,$description,$author,$license);
 # env. vars and their macro analogues
 my @MACROS = (
 
@@ -566,6 +566,39 @@ sub get_author($) {
     return $author='sorry, no author found';
 }
 
+sub get_license($) {
+    my $cont = shift;
+    my @lines=();
+    my $parser = Pod::POM->new;
+
+    # extract pod; the file may contain no pod, that's ok
+    my $pom = $parser->parse_text($cont);
+
+    HEAD1:
+    foreach my $head1 ($pom->head1) {
+
+        next HEAD1 unless $head1->title =~ /LICENSE/;
+
+        my $pom = $head1->content;
+        $license = $pom->present('Pod::POM::View::Text');
+
+        my @paragraphs = (split /\n/, $license);
+        foreach my $line (@paragraphs){
+            next if $line eq "";
+            next if $line =~ /Copyright/i;
+            $line =~ s/^/     /;
+            push(@lines, $line);
+        }
+
+        $license = join "\n", @lines;
+
+        # return...
+        return $license;
+    }
+    return $license='sorry, no license found';
+
+}
+
 sub check_rpm($) {
     my $dep=shift;
 
@@ -875,7 +908,7 @@ for my $ofile (@args) {
     print $spec qq[\%{!?perl_$vendorlib: \%define perl_$vendorlib \%(eval "\`\%{__perl} -V:install$vendorlib\`"; echo \$install$vendorlib)}\n\n]
         if ($compat);
 
-    my $license="";
+    $license=undef;
 
     my $scripts=0;
     my (%build_requires,%requires,%recommends);
@@ -937,7 +970,7 @@ for my $ofile (@args) {
                     . "  This package should not be redistributed.\n";
             } else {
                 warn "Unknown license '" . $meta->{license} . "'!\n";
-                $license="CHECK(Distributable)";
+                $license=undef;
             }
         }
         SKIP:
@@ -950,6 +983,13 @@ for my $ofile (@args) {
             $license.=", see @licenses";
         }
     }
+    if (!defined($license)) {
+       get_license($content);
+       if ($license =~ /under the same terms as Perl itself/) {
+          $license = "GPL+ or Artistic";
+       }
+    }
+
     $license="CHECK(GPL+ or Artistic)" if (!$license);
 
     my $usebuildpl=0;
