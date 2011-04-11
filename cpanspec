@@ -1096,15 +1096,19 @@ Summary:        $summary
 Url:            $url
 Group:          Development/Libraries/Perl
 END
+    my $sfile = basename($ofile);
+    $sfile=~s/$version/\%{version}/;
+    $sfile=~s/$name/\%{cpan_name}/;
+
     if ($source) {
-       if (basename($source) eq "%{cpan_name}-\%{version}.tar$ext") {
+       if (basename($source) eq $sfile) {
           print $spec "Source:         $source\n";
        } else {
          print $spec "#Source:        $source\n";
-         print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext\n";
+         print $spec "Source:         $ofile\n";
        }
     } else {
-       print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext\n";
+       print $spec "Source:         $ofile\n";
     }
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
     print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
