@@ -243,6 +243,7 @@ our @add_buildrequires;
 
 our ($file,$name,$source,$version,$type);
 our ($content,$summary,$description,$author,$license);
+
 # env. vars and their macro analogues
 my @MACROS = (
 
@@ -392,6 +393,7 @@ sub get_source($) {
     if ($m=$packages->package($file) and $d=$m->distribution()) {
         $source=$cpan . "/authors/id/" . $d->prefix();
         $source=~s/$version/\%{version}/;
+        $source=~s/$name/\%{cpan_name}/;
     } else {
         warn "Failed to parse '$file' or find a module by that name in $pkgdetails, skipping...\n";
         $source='';
@@ -704,6 +706,9 @@ my @processed=();
 
 for my $ofile (@args) {
 
+    ($file,$name,$source,$version,$type) = (undef, undef, undef, undef, undef);
+    ($content,$summary,$description,$author,$license) = (undef, undef, undef, undef, undef);
+
     if ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $file=$ofile;
         $name=$1;
@@ -982,8 +987,8 @@ for my $ofile (@args) {
 
     if (!defined($license)) {
        get_license($content);
-       if ($license =~ /under the same terms as Perl itself/ || 
-           $license =~ /under the terms of the Perl artistic license/) {
+       if ($license && ($license =~ /under the same terms as Perl itself/ || 
+           $license =~ /under the terms of the Perl artistic license/)) {
           $license = "GPL+ or Artistic";
        }
     }
@@ -1091,8 +1096,16 @@ Summary:        $summary
 Url:            $url
 Group:          Development/Libraries/Perl
 END
-    print $spec "#Source: $source\n" if ($source);
-    print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext\n";
+    if ($source) {
+       if (basename($source) eq "%{cpan_name}-\%{version}.tar$ext") {
+          print $spec "Source:         $source\n";
+       } else {
+         print $spec "#Source:        $source\n";
+         print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext\n";
+       }
+    } else {
+       print $spec "Source:         \%{cpan_name}-\%{version}.tar$ext\n";
+    }
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
     print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
 
@@ -1310,11 +1323,11 @@ END
     (my $basename = $specfile) =~ s{\.spec$}{};
     if (-f "$basename.changes") {
       verbose "Updating $basename.changes";
-      system("osc vc -m 'updated to $version'");
+      system("osc vc -m 'updated to $version' $name.changes");
     } else {
       verbose "Writing $basename.changes";
       system("osc vc -m 'initial package $version
-    * created by $NAME $VERSION' $basename");
+    * created by $NAME $VERSION' $basename.changes");
     }
 }
 
