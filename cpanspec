@@ -490,16 +490,18 @@ sub get_description($) {
     # extract pod; the file may contain no pod, that's ok
     my $pom = $parser->parse_text($cont);
 
+
     HEAD1:
     foreach my $head1 ($pom->head1) {
 
         next HEAD1 unless $head1->title eq 'DESCRIPTION';
 
-        my $pom = $head1->content;
-        $description = $pom->present('Pod::POM::View::Text');
+        $description = '';
+        foreach my $item ($head1->content()) {
+           last if ($item->type() eq 'head2');
+           $description .= $item->present('Pod::POM::View::Text');
+        }
 
-        # limit to 3 paragraphs at the moment
-        #my @paragraphs = (split /\n\n/, $description)[0..2];
         # no limit
         my @paragraphs = (split /\n\n/, $description);
 
@@ -1255,9 +1257,14 @@ END
     push(@processed, $module);
 
     (my $basename = $specfile) =~ s{\.spec$}{};
-    verbose "Writing $basename.changes";
-    system("osc vc -m 'initial package $version
-  * created by $NAME $VERSION' $basename");
+    if (-f "$basename.changes") {
+      verbose "Updating $basename.changes";
+      system("osc vc -m 'updated to $version'");
+    } else {
+      verbose "Writing $basename.changes";
+      system("osc vc -m 'initial package $version
+    * created by $NAME $VERSION' $basename");
+    }
 }
 
 # vi: set ai et:
