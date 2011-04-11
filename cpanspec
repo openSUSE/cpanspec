@@ -189,7 +189,7 @@ use strict;
 use warnings;
 
 our $NAME="cpanspec";
-our $VERSION='1.78.03';
+our $VERSION='1.78.04';
 
 use FileHandle;
 use Archive::Tar;
