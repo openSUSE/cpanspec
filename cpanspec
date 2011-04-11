@@ -13,7 +13,7 @@
 # $Id: cpanspec,v 1.67 2009/01/16 20:35:17 stevenpritchard Exp $
 
 our $NAME="cpanspec";
-our $VERSION='1.78';
+our $VERSION='1.78.02';
 
 =head1 NAME
 
@@ -573,15 +573,15 @@ my @processed=();
 for my $file (@args) {
     my ($name,$version,$type);
 
-    if ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/) {
+    if ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $name=$1;
         $version=$2;
         $type=$3;
-    } elsif ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.tgz$/) {
+    } elsif ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.tgz$/i) {
         $name=$1;
         $version=$2;
         $type = 'tar';
-    } elsif ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(zip)$/) {
+    } elsif ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(zip)$/i) {
         $name=$1;
         $version=$2;
         $type=$3;
@@ -604,11 +604,11 @@ for my $file (@args) {
             $name=$d->dist();
             $version=$d->version();
             $version=~s/^v\.?//;
-            if ($file =~ /\.(tar)\.gz$/) {
+            if ($file =~ /\.(tar)\.(?:gz|bz2)$/i) {
                 $type=$1;
-            } elsif ($file =~ /\.tgz$/) {
+            } elsif ($file =~ /\.tgz$/i) {
                 $type='tar';
-            } elsif ($file =~ /\.(zip)$/) {
+            } elsif ($file =~ /\.(zip)$/i) {
                 $type=$1;
             } else {
                 warn "Failed to parse '$file', skipping...\n";
@@ -1202,8 +1202,10 @@ END
 
     push(@processed, $module);
 
+    (my $basename = $specfile) =~ s{\.spec$}{};
+    verbose "Writing $basename.changes";
     system("osc vc -m 'initial package $version
-  * created by $NAME $VERSION'");
+  * created by $NAME $VERSION' $basename");
 }
 
 # vi: set ai et:
