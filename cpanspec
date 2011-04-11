@@ -929,7 +929,6 @@ for my $ofile (@args) {
         if ($meta->{abstract}) {
           my $abstract=$meta->{abstract};
           $summary=$abstract if (!defined($summary));
-          $description=$summary if (!defined($description));
         }
 
         %build_requires=%{$meta->{build_requires}} if ($meta->{build_requires});
@@ -1001,6 +1000,8 @@ for my $ofile (@args) {
     }
 
     $license="CHECK(GPL+ or Artistic)" if (!$license);
+
+    $description=$summary if (!defined($description));
 
     my $usebuildpl=0;
     if (grep /^Build\.PL$/, @files) {
