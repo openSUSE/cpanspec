@@ -13,7 +13,7 @@
 # $Id: cpanspec,v 1.67 2009/01/16 20:35:17 stevenpritchard Exp $
 
 our $NAME="cpanspec";
-our $VERSION='1.78';
+our $VERSION='1.78.03';
 
 =head1 NAME
 
@@ -254,7 +254,7 @@ my @MACROS = (
 
     # 1 is for the macros.
     {
-        'optimize'  => '%{optimize}',
+        'optimize'  => '%{optflags}',
         'buildroot' => '%{buildroot}',
     },
 );
@@ -1021,8 +1021,6 @@ for $file (@args) {
 # Please submit bugfixes or comments via http://bugs.opensuse.org/
 #
 
-# norootforbuild
-
 END
 
     print $spec <<END;
@@ -1048,6 +1046,7 @@ END
     print $spec <<END;
 BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build
 BuildRequires:  perl
+BuildRequires:  perl-macros
 END
 
     if ($usebuildpl) {
@@ -1055,10 +1054,6 @@ END
 BuildRequires:  perl(Module::Build)
 END
     }
-
-    print $spec <<END;
-BuildRequires:  perl-macros
-END
 
     for my $dep (keys(%requires)) {
         next if ($dep eq 'perl');
@@ -1090,7 +1085,7 @@ END
     }
 
     print $spec <<END;
-Requires:       perl = %{perl_version}
+%{perl_requires}
 END
 
     for my $dep (sort(keys(%requires))) {
