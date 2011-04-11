@@ -986,7 +986,8 @@ for my $ofile (@args) {
     }
     if (!defined($license)) {
        get_license($content);
-       if ($license =~ /under the same terms as Perl itself/) {
+       if ($license =~ /under the same terms as Perl itself/ || 
+           $license =~ /under the terms of the Perl artistic license/) {
           $license = "GPL+ or Artistic";
        }
     }
