@@ -1,0 +1,10 @@
+Build.PL
+cpanget
+cpanspec
+MANIFEST			This list of files
+META.yml
+COPYING
+Artistic
+BUGS
+TODO
+Changes

@@ -1,0 +1,135 @@
+1.78    2009-01-16
+
+* Fix up the license list some more.
+* Send STDIN to /dev/null in the child when executing Makefile.PL.
+  (Bug report from Peter Willis.)
+* Ignore pax_global_header file.
+* Assume that *.inl is a hint that this isn't noarch.
+* It's 2009.  Update Copyright.
+
+1.77    2008-06-16
+
+* Only use --nodeps if we're only building a source rpm.
+
+1.76    2008-06-16
+
+* Drop dependency on Module::CoreList and just fetch the list from rpm.
+
+1.75    2008-05-05
+
+* Try $] as-is and numeric when we use it with Module::CoreList.
+* Switch from wget to curl in cpanget since wget is broken in Fedora 9.
+* The best README is probably the one with the shortest filename.
+
+1.74    2007-12-11
+
+* Maybe finally handle "v" in version number correctly.
+* Continue on YAML errors.
+* "GPL or Artistic" is now "GPL+ or Artistic".  Other License tag-related
+  changes will follow.
+
+1.73    2007-07-22
+
+* Filter repoquery results better.
+
+1.72    2007-07-13
+
+* Get rid of the word "Extras".
+* Filter out "Loading ... plugin" when running repoquery.
+* Properly handle "requires: perl: 0" in META.yml.
+
+1.71    2007-06-29
+
+* It's 2007 now, so update the copyright.
+* Handle .bz2 files.
+* Exclude config.guess, config.sub, and install.sh (usually seen near
+  configure.)
+* Add option processing to cpanget.  It now accepts the following options:
+
+  -h          Print usage message
+  -n          Don't download, only print URLs
+  -q          Work quietly
+
+1.70    2007-03-12
+
+* Delete pm_to_blib if it exists.
+* Don't include the MODULE_COMPAT magic with --old.
+* Exclude *.cfg from %doc.
+* Add BuildRequires: perl(ExtUtils::MakeMaker) when using Makefile.PL.
+
+1.69.1  2006-10-16
+
+* Oops, it's "OPTIMIZE", not "optimize", when running Makefile.PL.
+
+1.69    2006-10-03
+
+* Exclude autobuild.sh.
+* Change regex to also drop leading "an" or "the" from Summary.
+* Tiny whitespace fix.
+* Add patch from Chris Weyl to add --prefer-macros and handle modules
+  specified as Foo-Bar instead of Foo::Bar (SF#1546966).
+* Originally -V was going to be the same as --version, but for some
+  reason it doesn't really work.  The documentation has been updated.
+
+1.68    2006-07-20
+
+* Fix find option ordering (patch from Ville Skyttä, #199442).
+* Random documentation updates.
+
+1.67    2006-07-13
+
+* Exclude NINJA.
+* Do a case-insensitive match on the possible licenses.
+* Add a patch from Ian Burrell to support .tgz archives.
+* Handle files that aren't in the current directory properly.
+
+1.66    2006-05-16
+
+* Fix $summary modification.
+* Strip leading [Vv]\.? from spec Version.
+* Add --epoch option.
+* rpm is in /bin, not /usr/bin.
+* Update list of licenses, and fix some to agree with rpmlint.
+* Use "$dep" instead of "$module" in a lot of loops to not conflict
+  with $module that stores the name of the module we're working on.
+* Add --follow and some simple code to fetch build dependencies.
+
+1.65    2006-04-26
+
+* Exclude inc (suggested by Ian Burrell).
+* Massage $summary (capitalize, remove trailing ".", remove leading "A").
+* Use %{__perl} instead of just "perl" when running Build.PL.
+
+1.64    2006-03-24
+
+* Look a couple more places for %description/Summary.
+* Avoid adding common directories to @doc.
+* If there is a Build.PL and a Makefile.PL, use Build.PL.
+
+1.63    2006-03-24
+
+* Look in $name.pod for %description and Summary also.
+* Avoid useless "Summary: SYNOPSIS".
+
+1.62    2006-03-22
+
+* Improve auto-detection of %description and Summary.
+
+1.61    2006-03-11
+
+* Add this file.
+* Add some command-line options:
+
+  --filter-requires    Specify Requires to remove
+  --filter-provides    Specify Provides to remove
+  --add-requires       Add Requires for this item
+  --add-provides       Add Provides for this item
+  --add-buildrequires  Add BuildRequires for this item
+  --version            Print the version and exit
+
+* Fix path check to allow for a directory without a trailing /.
+  (Found in Module::Install 0.59.)
+* Force en_US.UTF-8.
+  https://bugzilla.redhat.com/bugzilla/show_bug.cgi?id=185192
+
+# vi: set ai et:

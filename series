@@ -1,0 +1,5 @@
+# Patch series file for quilt, created by quilt setup
+# Source: cpanspec-1.78.tar.gz
+# Patchdir: cpanspec-1.78
+#
+cpanspec-suse.diff
