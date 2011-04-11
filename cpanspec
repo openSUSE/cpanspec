@@ -199,11 +199,12 @@ use locale;
 use Text::Autoformat;
 use YAML qw(Load);
 use Getopt::Long;
+use Pod::POM;
+use Pod::POM::View::Text;
 use Pod::Usage;
 use File::Basename;
 use LWP::UserAgent;
 use Parse::CPAN::Packages;
-use Pod::Simple::TextContent;
 # Apparently gets pulled in by another module.
 #use Cwd;
 
@@ -223,7 +224,6 @@ our $buildrpm=0;
 our $verbose=0;
 our $follow=0;
 our $macros=0;
-our $source;
 our $cpan=$ENV{'CPAN'} || "http://www.cpan.org";
 
 our $home=$ENV{'HOME'} || (getpwuid($<))[7];
@@ -241,6 +241,8 @@ our @add_requires;
 our @add_provides;
 our @add_buildrequires;
 
+our ($file,$name,$source,$version,$type);
+our ($content,$summary,$description,$author);
 # env. vars and their macro analogues
 my @MACROS = (
 
@@ -338,6 +340,60 @@ sub update_packages() {
     $updated=1;
 }
 
+sub get_file($) {
+    $file=shift;
+    # Look up $file in 02packages.details.txt.
+    update_packages();
+    $packages=Parse::CPAN::Packages->new($pkgdetails)
+        if (!defined($packages));
+    die "Parse::CPAN::Packages->new() failed: $!\n"
+        if (!defined($packages));
+    my ($m,$d);
+    if ($m=$packages->package($file) and $d=$m->distribution()) {
+        $source=$cpan . "/authors/id/" . $d->prefix();
+        $file=basename($d->filename());
+        fetch($source, $file) if (!-f $file);
+        $name=$d->dist();
+        $version=$d->version();
+        $version=~s/^v\.?//;
+        if ($file =~ /\.(tar)\.(?:gz|bz2)$/i) {
+            $type=$1;
+        } elsif ($file =~ /\.tgz$/i) {
+            $type='tar';
+        } elsif ($file =~ /\.(zip)$/i) {
+            $type=$1;
+        } else {
+            warn "Failed to parse '$file', skipping...\n";
+            next;
+        }
+    } else {
+        warn "Failed to parse '$file' or find a module by that name, skipping...\n";
+        next;
+    }
+}
+
+sub get_source($) {
+    $file=shift;
+
+    # keep things happy if we get "Foo-Bar" instead of "Foo::Bar"
+    $file =~ s/-/::/g;
+
+    # Look up $file in 02packages.details.txt.
+    update_packages();
+    $packages=Parse::CPAN::Packages->new($pkgdetails)
+        if (!defined($packages));
+    die "Parse::CPAN::Packages->new() failed: $!\n"
+        if (!defined($packages));
+    my ($m,$d);
+    if ($m=$packages->package($file) and $d=$m->distribution()) {
+        $source=$cpan . "/authors/id/" . $d->prefix();
+        $source=~s/$version/\%{version}/;
+    } else {
+        warn "Failed to parse '$file' or find a module by that name in $pkgdetails, skipping...\n";
+        next;
+    }
+}
+
 sub build_rpm($) {
     my $spec=shift;
     my $dir=getcwd();
@@ -387,10 +443,10 @@ sub extract($$$) {
     }
 }
 
-sub get_description(%) {
+sub get_content(%) {
     my %args=@_;
     my $pm="";
-    my ($summary, $description);
+    my $cont;
 
     my $path=$args{module};
     $path=~s,::,/,g;
@@ -415,60 +471,95 @@ sub get_description(%) {
         last if $pm;
     }
 
-    if ($pm) {
-        verbose "Trying to fetch description from $pm...";
-
-        if (my $content=extract($args{archive}, $args{type}, $pm)) {
-            my $parser=Pod::Simple::TextContent->new()
-                or die "Pod::Simple::TextContent->new() failed: $!\n";
-            $parser->no_whining(1);
-            my $rendered="";
-            $parser->output_string(\$rendered);
-            $parser->parse_string_document($content);
-            if ($parser->content_seen and $rendered) {
-                if ($rendered=~/DESCRIPTION\s+(\S.*?)\n\n/s) {
-                    $description=$1;
-                }
-                if ($rendered=~/NAME\s*$args{module}\s[-\s]*(\S[^\n]*)/s) {
-                    if ($1 ne "SYNOPSIS") {
-                        $summary=$1;
-                        $summary=~s/[.\s]+$//;
-                        $summary=~s/^(?:An?|The)\s+//i;
-                        $summary=ucfirst($summary);
-                    }
-                }
-                return($description, $summary) if (defined($description));
-            }
-        } else {
-            warn "Failed to read $pm from $args{filename}"
-                . ($args{type} eq 'tar'
-                    ? (": " . $args{archive}->error()) : "") . "\n";
-        }
+    if (my $cont=extract($args{archive}, $args{type}, $pm)) {
+        return $cont;
+    } else {
+        warn "Failed to read $pm from $args{filename}"
+        . ($args{type} eq 'tar'
+            ? (": " . $args{archive}->error()) : "") . "\n";
+        return(undef, undef);
     }
+}
 
-    if (my $readme=(sort {
-                        length($a) <=> length($b) or $a cmp $b
-                     } (grep /README/i, @{$args{files}}))[0]) {
-        verbose "Trying to fetch description from $readme...";
+sub get_description($) {
+    my $cont = shift;
+    my $parser = Pod::POM->new;
 
-        if (my $content=extract($args{archive}, $args{type},
-                "$args{path}/$readme")) {
-            $content=~s/\r//g; # Why people use DOS text, I'll never understand.
-            for my $string (split "\n\n", $content) {
-                $string=~s/^\n+//;
-                if ((my @tmp=split "\n", $string) > 2
-                    and $string !~ /^[#\-=]/) {
-                    return($string, undef);
-                }
-            }
-        } else {
-            warn "Failed to read $readme from $args{filename}"
-                . ($args{type} eq 'tar'
-                    ? (": " . $args{archive}->error()) : "") . "\n";
-        }
+    # extract pod; the file may contain no pod, that's ok
+    my $pom = $parser->parse_text($cont);
+
+    HEAD1:
+    foreach my $head1 ($pom->head1) {
+
+        next HEAD1 unless $head1->title eq 'DESCRIPTION';
+
+        my $pom = $head1->content;
+        $description = $pom->present('Pod::POM::View::Text');
+
+        # limit to 3 paragraphs at the moment
+        #my @paragraphs = (split /\n\n/, $description)[0..2];
+        # no limit
+        my @paragraphs = (split /\n\n/, $description);
+
+        $description = join "\n\n", @paragraphs;
+
+        # autoformat and return...
+        return autoformat $description, { all => 1 };
     }
+    return $description='sorry, no description found';
+}
 
-    return(undef, undef);
+sub get_summary($$) {
+    my $cont = shift;
+    my $mod = shift;
+    my $parser = Pod::POM->new;
+
+    # extract pod; the file may contain no pod, that's ok
+    my $pom = $parser->parse_text($cont);
+
+    HEAD1:
+    foreach my $head1 ($pom->head1) {
+
+        next HEAD1 unless $head1->title eq 'NAME';
+
+        my $pom = $head1->content;
+        $pom =~ /^[^-]+ - (.*)$/m;
+
+        # return...
+        return $summary = $1 if $pom;
+    }
+    return $summary="$mod Perl module";
+}
+
+sub get_author($) {
+    my $cont = shift;
+    my @lines=();
+    my $parser = Pod::POM->new;
+
+    # extract pod; the file may contain no pod, that's ok
+    my $pom = $parser->parse_text($cont);
+
+    HEAD1:
+    foreach my $head1 ($pom->head1) {
+
+        next HEAD1 unless $head1->title eq 'AUTHOR';
+
+        my $pom = $head1->content;
+        $author = $pom->present('Pod::POM::View::Text');
+
+        my @paragraphs = (split /\n/, $author);
+        foreach my $line (@paragraphs){
+            next if $line eq "";
+            $line =~ s/^/     /;
+            push(@lines, $line);
+        }
+  
+        $author = join "\n", @lines; 
+
+        # return...
+        return $author;
+    }
+    return $author='sorry, no author found';
 }
 
 sub check_rpm($) {
@@ -570,8 +661,7 @@ while (my $provides=<$rpm>) {
 my @args=@ARGV;
 my @processed=();
 
-for my $file (@args) {
-    my ($name,$version,$type);
+for $file (@args) {
 
     if ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $name=$1;
@@ -591,37 +681,16 @@ for my $file (@args) {
         $file =~ s/-/::/g;
 
         # Look up $file in 02packages.details.txt.
-        update_packages();
-        $packages=Parse::CPAN::Packages->new($pkgdetails)
-            if (!defined($packages));
-        die "Parse::CPAN::Packages->new() failed: $!\n"
-            if (!defined($packages));
-        my ($m,$d);
-        if ($m=$packages->package($file) and $d=$m->distribution()) {
-            $source=$cpan . "/authors/id/" . $d->prefix();
-            $file=basename($d->filename());
-            fetch($source, $file);
-            $name=$d->dist();
-            $version=$d->version();
-            $version=~s/^v\.?//;
-            if ($file =~ /\.(tar)\.(?:gz|bz2)$/i) {
-                $type=$1;
-            } elsif ($file =~ /\.tgz$/i) {
-                $type='tar';
-            } elsif ($file =~ /\.(zip)$/i) {
-                $type=$1;
-            } else {
-                warn "Failed to parse '$file', skipping...\n";
-                next;
-            }
-        } else {
-            warn "Failed to parse '$file' or find a module by that name, skipping...\n";
-            next;
-        }
+        get_file($file);
     }
 
     my $module=$name;
     $module=~s/-/::/g;
+
+    my $packlist=$name;
+    $packlist=~s/-/\//g;
+
+    my $packlistfile="auto/$packlist/.packlist";
 
     my $archive;
     my $path;
@@ -677,12 +746,9 @@ for my $file (@args) {
 
     my $url="http://search.cpan.org/dist/$name/";
 
-    $source=$source || "http://www.cpan.org/modules/by-module/"
-        . ($module=~/::/ ? (split "::", $module)[0] : (split "-", $name)[0])
-        . "/" . basename($file);
-    $source=~s/$version/\%{version}/;
+    get_source($name) if(!defined $source);
 
-    my ($description,$summary)=get_description(
+    $content = get_content(
             archive     => $archive,
             type        => $type,
             filename    => $file,
@@ -693,18 +759,13 @@ for my $file (@args) {
             path        => $path,
         );
 
-    if (defined($description) and $description) {
-        $description=autoformat $description, { "all"     => 1,
-                                                "left"    => 1,
-                                                "right"   => 75,
-                                                "squeeze" => 0,
-                                              };
-        $description=~s/\n+$//s;
-    } else {
-        $description="$module Perl module";
-    }
+    get_description($content) if(!defined($description));
 
-    $summary="$module Perl module" if (!defined($summary));
+    get_summary($content,$module) if (!defined($summary));
+    
+    get_author($content) if (!defined($author));
+
+    my $authors="Authors:\n--------\n$author";
 
     my @doc=sort { $a cmp $b } grep {
                 !/\//
@@ -1002,6 +1063,7 @@ BuildRequires:  perl-macros
 END
 
     for my $dep (keys(%requires)) {
+        next if ($dep eq 'perl');
         $build_requires{$dep}=$build_requires{$dep} || $requires{$dep};
     }
 
@@ -1010,6 +1072,7 @@ END
             next if (!$compat);
         } elsif ($follow) {
             if ($dep ne $module and !(grep { $_ eq $dep } @processed, @args)) {
+                print "dep: $dep\n";
                 if (check_dep($dep)) {
                     verbose("$dep is available, skipping.");
                 } else {
@@ -1033,6 +1096,7 @@ Requires:       perl = %{perl_version}
 END
 
     for my $dep (sort(keys(%requires))) {
+        next if ($dep eq 'perl');
         next if (!$compat and exists($corelist{$dep}));
         printf $spec "%-16s%s", "Requires:", "perl($dep)";
         print $spec (" >= " . $requires{$dep}) if ($requires{$dep});
@@ -1073,6 +1137,8 @@ END
 
 \%description
 $description
+
+$authors
 
 \%prep
 \%setup -q@{[($noprefix ? "" : " -n $buildpath")]}
@@ -1146,26 +1212,33 @@ END
         print $spec
             "./Build install destdir=$macro{buildroot} create_packlist=0\n";
     } else {
-      if ($noarch) {
         print $spec <<END;
 %perl_make_install
-# do not perl_process_packlist (noarch)
-# remove .packlist file
-%{__rm} -rf \$RPM_BUILD_ROOT%perl_vendorarch
-# remove perllocal.pod file
-%{__rm} -rf \$RPM_BUILD_ROOT%perl_archlib
-END
-      } else {
-        print $spec <<END;
-%perl_make_install
+### since 11.4 perl_process_packlist
+### removes .packlist, perllocal.pod files
+%if 0%{?suse_version} > 1130
 %perl_process_packlist
+%else
+# do not perl_process_packlist
+# remove .packlist file
 END
-      }
-    }
 
-    print $spec <<END;
-%perl_gen_filelist
+      if ($noarch) {
+        print $spec
+            "%{__rm} -rf $macro{buildroot}%perl_vendorarch\n";
+      } else {
+        print $spec
+            "%{__rm} -f $macro{buildroot}%perl_vendorarch/$packlistfile\n";
+      }
+
+        print $spec <<END;
+# remove perllocal.pod file
+%{__rm} -f $macro{buildroot}%perl_archlib/perllocal.pod
+%endif
 END
+    }
+    print $spec
+        "%perl_gen_filelist\n";
 
     if ($addlicense and !grep /copying|artistic|copyright|license/i, @doc) {
         print $spec <<END;
