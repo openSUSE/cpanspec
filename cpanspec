@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 #
 # cpanspec - Generate a spec file for a CPAN module
 #
@@ -356,6 +356,7 @@ sub get_file($) {
         $name=$d->dist();
         $version=$d->version();
         $version=~s/^v\.?//;
+        $source=~s/$version/\%{version}/;
         if ($file =~ /\.(tar)\.(?:gz|bz2)$/i) {
             $type=$1;
         } elsif ($file =~ /\.tgz$/i) {
@@ -387,12 +388,12 @@ sub get_source($) {
     my ($m,$d);
     if ($m=$packages->package($file) and $d=$m->distribution()) {
         $source=$cpan . "/authors/id/" . $d->prefix();
-        $source=~s/$version/\%{version}/;
     } else {
         warn "Failed to parse '$file' or find a module by that name in $pkgdetails, skipping...\n";
         $source='';
         return;
     }
+    $source=~s/$version/\%{version}/;
 }
 
 sub build_rpm($) {
@@ -662,17 +663,20 @@ while (my $provides=<$rpm>) {
 my @args=@ARGV;
 my @processed=();
 
-for my $file (@args) {
+for my $ofile (@args) {
 
-    if ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
+    if ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
+        $file=$ofile;
         $name=$1;
         $version=$2;
         $type=$3;
-    } elsif ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.tgz$/i) {
+    } elsif ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.tgz$/i) {
+        $file=$ofile;
         $name=$1;
         $version=$2;
         $type = 'tar';
-    } elsif ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(zip)$/i) {
+    } elsif ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(zip)$/i) {
+        $file=$ofile;
         $name=$1;
         $version=$2;
         $type=$3;
