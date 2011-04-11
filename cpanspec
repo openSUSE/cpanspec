@@ -694,6 +694,7 @@ for $file (@args) {
 
     my $archive;
     my $path;
+    my $ext = '.gz';
     if ($type eq 'tar') {
         my $f=$file;
         if ($file=~/\.bz2$/) {
@@ -712,12 +713,14 @@ for $file (@args) {
                 warn "IO::Uncompress::Bunzip2->new() failed on $file: $!\n";
                 next;
             }
+            $ext = '.bz2';
         }
         $archive=Archive::Tar->new($f, 1)
             or die "Archive::Tar->new() failed: $!\n";
     } elsif ($type eq 'zip') {
         $archive=Archive::Zip->new() or die "Archive::Zip->new() failed: $!\n";
         die "Read error on $file\n" unless ($archive->read($file) == AZ_OK);
+        $ext = '.zip';
     }
 
     my @files;
@@ -1038,7 +1041,7 @@ License:        $license
 Group:          Development/Libraries/Perl
 Url:            $url
 #Source:         $source
-Source:         \%{cpan_name}-\%{version}.tar.bz2
+Source:         \%{cpan_name}-\%{version}.tar$ext
 END
 
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
@@ -1207,27 +1210,7 @@ END
     } else {
         print $spec <<END;
 %perl_make_install
-### since 11.4 perl_process_packlist
-### removes .packlist, perllocal.pod files
-%if 0%{?suse_version} > 1130
 %perl_process_packlist
-%else
-# do not perl_process_packlist
-# remove .packlist file
-END
-
-      if ($noarch) {
-        print $spec
-            "%{__rm} -rf $macro{buildroot}%perl_vendorarch\n";
-      } else {
-        print $spec
-            "%{__rm} -f $macro{buildroot}%perl_vendorarch/$packlistfile\n";
-      }
-
-        print $spec <<END;
-# remove perllocal.pod file
-%{__rm} -f $macro{buildroot}%perl_archlib/perllocal.pod
-%endif
 END
     }
     print $spec
@@ -1251,9 +1234,11 @@ END
     (@filter_provides ? ' %{__perl_provides}' : '')]}
 
 \%files -f \%{name}.files
-\%defattr(-,root,root,-)
-\%doc @doc
 END
+    if (@doc) {
+       print $spec "\%defattr(644,root,root,755)\n";
+       print $spec "%doc @doc\n";
+    }
 
     if ($scripts) {
         print $spec "\%{_bindir}/*\n";
