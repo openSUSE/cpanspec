@@ -510,7 +510,7 @@ sub get_description($) {
         # autoformat and return...
         return autoformat $description, { all => 1 };
     }
-    return $description='sorry, no description found';
+    return $description=undef;
 }
 
 sub get_summary($$) {
@@ -805,6 +805,7 @@ for my $ofile (@args) {
     get_description($content) if(!defined($description));
 
     get_summary($content,$module) if (!defined($summary));
+    $description=$summary if (!defined($description));
     
     get_author($content) if (!defined($author));
 
