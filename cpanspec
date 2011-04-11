@@ -12,9 +12,6 @@
 #
 # $Id: cpanspec,v 1.67 2009/01/16 20:35:17 stevenpritchard Exp $
 
-our $NAME="cpanspec";
-our $VERSION='1.78.03';
-
 =head1 NAME
 
 cpanspec - Generate a spec file for a CPAN module
@@ -190,6 +187,9 @@ L<perl(1)>, L<cpan2rpm(1)>, L<cpanflute2(1)>
 
 use strict;
 use warnings;
+
+our $NAME="cpanspec";
+our $VERSION='1.78.03';
 
 use FileHandle;
 use Archive::Tar;
@@ -390,7 +390,8 @@ sub get_source($) {
         $source=~s/$version/\%{version}/;
     } else {
         warn "Failed to parse '$file' or find a module by that name in $pkgdetails, skipping...\n";
-        next;
+        $source='';
+        return;
     }
 }
 
@@ -661,7 +662,7 @@ while (my $provides=<$rpm>) {
 my @args=@ARGV;
 my @processed=();
 
-for $file (@args) {
+for my $file (@args) {
 
     if ($file =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $name=$1;
