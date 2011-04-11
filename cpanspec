@@ -1227,10 +1227,8 @@ END
 
 \%files -f \%{name}.files
 END
-    if (@doc) {
-       print $spec "\%defattr(644,root,root,755)\n";
-       print $spec "%doc @doc\n";
-    }
+    print $spec "\%defattr(644,root,root,755)\n";
+    print $spec "%doc @doc\n" if (@doc);
 
     if ($scripts) {
         print $spec "\%{_bindir}/*\n";
