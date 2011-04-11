@@ -963,6 +963,7 @@ END
 
     print $spec <<END;
 Name:           $prefix$name
+Summary:        $summary
 Version:        $version
 Release:        $release
 END
@@ -970,26 +971,18 @@ END
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
 
     print $spec <<END;
-Summary:        $summary
 License:        $license
 Group:          Development/Libraries/Perl
 Url:            $url
 Source:         $source
-BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build
 END
 
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
 
-    if (defined($requires{perl})) {
-        $build_requires{perl}=$build_requires{perl} || $requires{perl};
-        delete $requires{perl};
-    }
-
-    if (defined($build_requires{perl})) {
-        printf $spec "%-16s%s >= %s\n", "BuildRequires:", "perl",
-            $build_requires{perl} if $build_requires{perl};
-        delete $build_requires{perl};
-    }
+    print $spec <<END;
+BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build
+BuildRequires:  perl
+END
 
     print $spec <<END;
 %if 0%{?suse_version} < 1120
