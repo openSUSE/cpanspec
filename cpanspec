@@ -963,6 +963,7 @@ END
 
     print $spec <<END;
 Name:           $prefix$name
+%define cpan_name $name
 Summary:        $summary
 Version:        $version
 Release:        $release
@@ -974,7 +975,8 @@ END
 License:        $license
 Group:          Development/Libraries/Perl
 Url:            $url
-Source:         $source
+#Source:         $source
+Source:         \%{cpan_name}-\%{version}.tar.bz2
 END
 
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
@@ -983,6 +985,12 @@ END
 BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build
 BuildRequires:  perl
 END
+
+    if ($usebuildpl) {
+        print $spec <<END;
+BuildRequires:  perl(Module::Build)
+END
+    }
 
     print $spec <<END;
 %if 0%{?suse_version} < 1120
@@ -1056,6 +1064,7 @@ END
     }
 
     my $buildpath=$path;
+    $buildpath=~s/$name/\%{cpan_name}/;
     $buildpath=~s/$version/\%{version}/;
     print $spec <<END;
 
@@ -1098,10 +1107,12 @@ END
         print $spec <<END;
 \%{__perl} Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
 ./Build
+
 END
     } else {
         print $spec <<END;
 \%{__perl} Makefile.PL INSTALLDIRS=vendor@{[$noarch ? '' : qq{ OPTIMIZE="$macro{optimize}"}]}
+
 END
 
         print $spec
