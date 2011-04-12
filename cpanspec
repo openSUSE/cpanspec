@@ -941,6 +941,17 @@ for my $ofile (@args) {
         }
 
         %build_requires=%{$meta->{build_requires}} if ($meta->{build_requires});
+        if ($meta->{configure_requires}) {
+          while (my ($key, $value) = each(%{$meta->{configure_requires}})) {
+            $build_requires{$key} = $value;
+          }
+        }
+        if ($meta->{test_requires}) {
+          while (my ($key, $value) = each(%{$meta->{test_requires}})) {
+            $build_requires{$key} = $value;
+          }
+        }
+ 
         %requires=%{$meta->{requires}} if ($meta->{requires});
         %recommends=%{$meta->{recommends}} if ($meta->{recommends});
 
@@ -1327,7 +1338,7 @@ END
     (my $basename = $specfile) =~ s{\.spec$}{};
     if (-f "$basename.changes") {
       verbose "Updating $basename.changes";
-      system("osc vc -m 'updated to $version' $name.changes");
+      system("osc vc -m 'updated to $version' $basename.changes");
     } else {
       verbose "Writing $basename.changes";
       system("osc vc -m 'initial package $version
