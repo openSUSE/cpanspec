@@ -208,6 +208,12 @@ use Parse::CPAN::Packages;
 # Apparently gets pulled in by another module.
 #use Cwd;
 
+require Carp;
+
+$SIG{__DIE__} = sub {
+    Carp::confess("Died");
+};
+
 our %opt;
 
 our $help=0;
@@ -504,7 +510,7 @@ sub get_description($) {
         $description = '';
         foreach my $item ($head1->content()) {
            last if ($item->type() eq 'head2');
-           $description .= $item->present('Pod::POM::View::Text');
+           eval { $description .= $item->present('Pod::POM::View::Text'); }
         }
 
         # no limit
@@ -1316,7 +1322,7 @@ END
     print $spec "\%defattr(-,root,root,755)\n";
 
     if (@doc) {
-       print $spec "%doc %attr(644,root,root,755) @doc\n";
+       print $spec "%doc %attr(644,root,root) @doc\n";
     }
 
     if ($scripts) {
