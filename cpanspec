@@ -1322,7 +1322,7 @@ END
     print $spec "\%defattr(-,root,root,755)\n";
 
     if (@doc) {
-       print $spec "%doc %attr(644,root,root) @doc\n";
+       print $spec "%doc @doc\n";
     }
 
     if ($scripts) {
