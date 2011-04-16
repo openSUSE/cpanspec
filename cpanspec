@@ -543,7 +543,7 @@ sub get_summary($$) {
         # return...
         return $summary = $1 if $pom;
     }
-    return $summary="$mod Perl module";
+    return $summary;
 }
 
 sub get_author($) {
@@ -1008,6 +1008,10 @@ for my $ofile (@args) {
            $license =~ /under the terms of the Perl artistic license/)) {
           $license = "GPL+ or Artistic";
        }
+    }
+
+    if (!length($summary)) {
+      $summary="$module Perl module";
     }
 
     $license="CHECK(GPL+ or Artistic)" if (!$license);
