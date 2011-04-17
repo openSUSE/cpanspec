@@ -512,7 +512,7 @@ sub get_description($) {
         $description = '';
         foreach my $item ($head1->content()) {
            last if ($item->type() eq 'head2');
-           eval { $description .= $item->present('Pod::POM::View::Text'); }
+           eval { $description .= $item->present('Pod::POM::View::Text'); };
         }
 
         # no limit
@@ -562,7 +562,7 @@ sub get_author($) {
         next HEAD1 unless $head1->title eq 'AUTHOR';
 
         my $pom = $head1->content;
-        $author = $pom->present('Pod::POM::View::Text');
+        eval { $author = $pom->present('Pod::POM::View::Text'); };
 
         my @paragraphs = (split /\n/, $author);
         foreach my $line (@paragraphs){
@@ -593,7 +593,7 @@ sub get_license($) {
         next HEAD1 unless $head1->title =~ /LICENSE/i || $head1->title =~ /COPYRIGHT/i ;
 
         my $pom = $head1->content;
-        $license = $pom->present('Pod::POM::View::Text');
+        eval { $license = $pom->present('Pod::POM::View::Text'); };
 
         my @paragraphs = (split /\n/, $license);
         foreach my $line (@paragraphs){
