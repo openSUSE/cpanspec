@@ -383,7 +383,7 @@ sub get_file($) {
 }
 
 sub get_source($) {
-    $file=shift;
+    my $file=shift;
 
     # keep things happy if we get "Foo-Bar" instead of "Foo::Bar"
     $file =~ s/-/::/g;
@@ -483,6 +483,8 @@ sub get_content(%) {
             list_files($args{archive}, $args{type}))[0];
         last if $pm;
     }
+
+    return (undef, undef) if (!length($pm));
 
     if (my $cont=extract($args{archive}, $args{type}, $pm)) {
         return $cont;
