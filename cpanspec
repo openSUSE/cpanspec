@@ -43,6 +43,7 @@ cpanspec [options] [file [...]]
    --add-requires       Add Requires for this item
    --add-provides       Add Provides for this item
    --add-buildrequires  Add BuildRequires for this item
+   --skip-changes       Do not create or update .changes file
    --version            Print the version number and exit
 
 =head1 DESCRIPTION
@@ -230,6 +231,7 @@ our $buildrpm=0;
 our $verbose=0;
 our $follow=0;
 our $macros=1;
+our $skip_changes=0;
 our $cpan=$ENV{'CPAN'} || "http://www.cpan.org";
 
 our $home=$ENV{'HOME'} || (getpwuid($<))[7];
@@ -677,6 +679,7 @@ GetOptions(
         'add-requires=s'    => \@add_requires,
         'add-provides=s'    => \@add_provides,
         'add-buildrequires=s' => \@add_buildrequires,
+        'skip-changes'      => \$skip_changes,
         'version'           => \&print_version,
         'prefer-macros|m'   => \$macros,
     ) or pod2usage({ -exitval => 1, -verbose => 0 });
@@ -1349,15 +1352,17 @@ END
 
     push(@processed, $module);
 
-    (my $basename = $specfile) =~ s{\.spec$}{};
-    if (-f "$basename.changes") {
-      verbose "Updating $basename.changes";
-      system("osc vc -m 'updated to $version' $basename.changes");
-    } else {
-      verbose "Writing $basename.changes";
-      system("osc vc -m 'initial package $version
+    if (!$skip_changes) {
+      (my $basename = $specfile) =~ s{\.spec$}{};
+      if (-f "$basename.changes") {
+        verbose "Updating $basename.changes";
+        system("osc vc -m 'updated to $version' $basename.changes");
+      } else {
+        verbose "Writing $basename.changes";
+        system("osc vc -m 'initial package $version
     * created by $NAME $VERSION' $basename.changes");
-    }
+      }
+   }
 }
 
 # vi: set ai et:
