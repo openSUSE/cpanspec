@@ -832,7 +832,7 @@ for my $ofile (@args) {
 
     my @doc=sort { $a cmp $b } grep {
                 !/\//
-            and !/\.(pl|xs|h|c|pm|in|pod|cfg|inl)$/i
+            and !/\.(pl|xs|h|c|pm|in|pod|cfg|inl|bak)$/i
             and !/^\./
             and $_ ne $path
             and $_ ne "MANIFEST"
