@@ -860,7 +860,8 @@ for my $ofile (@args) {
             } @files;
 
     # special subdir
-    push(@doc, "examples") if grep(/examples\//, @files);
+    push(@doc, "examples") if grep(/^examples\//, @files);
+    push(@doc, "doc") if grep(/^doc\//, @files);
 
     my $date=strftime("%a %b %d %Y", localtime);
 
