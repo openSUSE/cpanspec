@@ -443,6 +443,9 @@ sub is_in_core($$) {
   return 0 unless $release;
   # 10.1 is the minimum we care for
   my $ret = $release <= 5.008008;
+  if ($ret) {
+    verbose("skipping core module $module >= $version");
+  }
   return $ret;
 }
 
