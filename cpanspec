@@ -207,6 +207,8 @@ use Pod::Usage;
 use File::Basename;
 use LWP::UserAgent;
 use Parse::CPAN::Packages;
+use File::Temp;
+use File::Path qw(remove_tree);
 # Apparently gets pulled in by another module.
 #use Cwd;
 
@@ -241,6 +243,7 @@ die "Can't locate home directory.  Please define \$HOME.\n"
 
 our $pkgdetails="$home/.cpan/sources/modules/02packages.details.txt.gz";
 our $updated=0;
+our $basedir = mkdtemp( "/tmp/cpanspecXXXXXX") . "/";
 
 our $packages;
 
@@ -250,7 +253,7 @@ our @add_requires;
 our @add_provides;
 our @add_buildrequires;
 
-our ($file,$name,$source,$version,$type);
+our ($file,$name,$source,$version);
 our ($content,$summary,$description,$author,$license);
 
 # env. vars and their macro analogues
@@ -369,16 +372,6 @@ sub get_file($) {
         $version=$d->version();
         $version=~s/^v\.?//;
         $source=~s/$version/\%{version}/;
-        if ($file =~ /\.(tar)\.(?:gz|bz2)$/i) {
-            $type=$1;
-        } elsif ($file =~ /\.tgz$/i) {
-            $type='tar';
-        } elsif ($file =~ /\.(zip)$/i) {
-            $type=$1;
-        } else {
-            warn "Failed to parse '$file', skipping...\n";
-            next;
-        }
     } else {
         warn "Failed to parse '$file' or find a module by that name, skipping...\n";
         next;
@@ -449,27 +442,16 @@ sub is_in_core($$) {
   return $ret;
 }
 
-sub list_files($$) {
-    my $archive=$_[0];
-    my $type=$_[1];
-
-    if ($type eq 'tar') {
-        return $archive->list_files();
-    } elsif ($type eq 'zip') {
-        return map { $_->fileName(); } $archive->members();
-    }
-}
-
-sub extract($$$) {
-    my $archive=$_[0];
-    my $type=$_[1];
-    my $filename=$_[2];
-
-    if ($type eq 'tar') {
-        return $archive->get_content($filename);
-    } elsif ($type eq 'zip') {
-        return $archive->contents($filename);
-    }
+sub readfile($) {
+    local $/=undef;
+    my $filename = shift;
+    die "empty filename" unless length($filename);
+    verbose "readfile $basedir$filename\n";
+    open FILE, $basedir . $filename or return undef;
+    binmode FILE;
+    my $string = <FILE>;
+    close FILE;
+    return $string;
 }
 
 sub get_content(%) {
@@ -479,35 +461,31 @@ sub get_content(%) {
 
     my $path=$args{module};
     $path=~s,::,/,g;
-    my @pmfiles=("$args{path}/lib/$path.pod",
-        "$args{path}/lib/$path.pm");
+    my @pmfiles=("lib/$path.pod",
+        "lib/$path.pm");
     if ($args{module} =~ /::/) {
         my @tmp=split '/', $path;
         my $last=pop @tmp;
-        push(@pmfiles, "$args{path}/lib/$last.pod",
-            "$args{path}/lib/$last.pm");
+        push(@pmfiles, "lib/$last.pod",
+            "lib/$last.pm");
     }
     do {
-        push(@pmfiles, "$args{path}/$path.pod",
-            "$args{path}/$path.pm");
+        push(@pmfiles, "$path.pod", "$path.pm");
     } while ($path=~s,^[^/]+/,,);
-    push(@pmfiles, "$args{path}/$args{module}")
+    push(@pmfiles, "$args{module}")
         if ($args{module} !~ /::/);
 
     for my $file (@pmfiles) {
-        $pm=(grep { $_ eq $file or $_ eq "./$file" }
-            list_files($args{archive}, $args{type}))[0];
+        $pm=(grep { $_ eq $file or $_ eq "./$file" } @{$args{files}})[0];
         last if $pm;
     }
 
     return (undef, undef) if (!length($pm));
 
-    if (my $cont=extract($args{archive}, $args{type}, $pm)) {
+    if (my $cont=readfile("$args{path}/$pm")) {
         return $cont;
     } else {
-        warn "Failed to read $pm from $args{filename}"
-        . ($args{type} eq 'tar'
-            ? (": " . $args{archive}->error()) : "") . "\n";
+        warn "Failed to read $args{path}/$pm from $args{filename}\n";
         return(undef, undef);
     }
 }
@@ -718,7 +696,8 @@ my @processed=();
 
 for my $ofile (@args) {
 
-    ($file,$name,$source,$version,$type) = (undef, undef, undef, undef, undef);
+    my $type = undef;
+    ($file,$name,$source,$version) = (undef, undef, undef, undef);
     ($content,$summary,$description,$author,$license) = (undef, undef, undef, undef, undef);
 
     if ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
@@ -748,14 +727,11 @@ for my $ofile (@args) {
     my $module=$name;
     $module=~s/-/::/g;
 
-    my $packlist=$name;
-    $packlist=~s/-/\//g;
-
-    my $packlistfile="auto/$packlist/.packlist";
-
     my $archive;
     my $path;
     my $ext = '.gz';
+    my @archive_files = ();
+
     if ($type eq 'tar') {
         my $f=$file;
         if ($file=~/\.bz2$/) {
@@ -776,20 +752,22 @@ for my $ofile (@args) {
             }
             $ext = '.bz2';
         }
-        $archive=Archive::Tar->new($f, 1)
-            or die "Archive::Tar->new() failed: $!\n";
+	my $next = Archive::Tar->iter( $f, 1, { prefix => "/tmp/tar" });
+	
+	while( my $f = $next->() ) {
+	    push(@archive_files, $f->full_path);
+	    $f->extract($basedir . $f->full_path) or warn "Extraction failed " . $f->full_path;
+	}
     } elsif ($type eq 'zip') {
         $archive=Archive::Zip->new() or die "Archive::Zip->new() failed: $!\n";
         die "Read error on $file\n" unless ($archive->read($file) == AZ_OK);
         $ext = '.zip';
+	die "we do not support ZIP atm\n";
     }
-
-    my @files;
-    
+ 
+    my @files = ();
     my $bogus=0;
-    for my $entry (list_files($archive, $type)) {
-        next if ($type eq 'tar' and $entry eq 'pax_global_header');
-
+    foreach my $entry (@archive_files) {
         if ($entry !~ /^(?:.\/)?($name-(?:v\.?)?$version)(?:\/|$)/) {
             warn "BOGUS PATH DETECTED: $entry\n";
             $bogus++;
@@ -813,8 +791,6 @@ for my $ofile (@args) {
     get_source($name) if(!defined $source && -d dirname($pkgdetails));
 
     $content = get_content(
-            archive     => $archive,
-            type        => $type,
             filename    => $file,
             name        => $name,
             module      => $module,
@@ -939,7 +915,7 @@ for my $ofile (@args) {
     my (%build_requires,%requires,%recommends);
     my ($yml,$meta);
     if (grep /^META\.yml$/, @files
-        and $yml=extract($archive, $type, "$path/META.yml")) {
+        and $yml=readfile("$path/META.yml")) {
         # Basic idea borrowed from Module::Depends.
         my $meta;
         eval { $meta=Load($yml); };
@@ -1061,7 +1037,7 @@ for my $ofile (@args) {
 
             local $/=undef;
 
-            my $makefilepl=extract($archive, $type, "$path/Makefile.PL")
+            my $makefilepl=readfile("$path/Makefile.PL")
                 or warn "Failed to extract $path/Makefile.PL";
 
             open(STDIN, ">/dev/null");
@@ -1090,11 +1066,13 @@ for my $ofile (@args) {
         }
     }
 
+    remove_tree($basedir);
+
     print $spec <<END;
 #
 # spec file for package $prefix$name (Version $version)
 #
-# Copyright (c) 2010 SUSE LINUX Products GmbH, Nuernberg, Germany.
+# Copyright (c) 2011 SUSE LINUX Products GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -1143,9 +1121,6 @@ END
     print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
 
     printf $spec "%-16s%s\n", "BuildRequires:", "perl";
-    if ($usebuildpl) {
-        printf $spec "%-16s%s\n", "BuildRequires:", "perl(Module::Build)";
-    }
     printf $spec "%-16s%s\n", "BuildRequires:", "perl-macros";
 
     for my $dep (keys(%requires)) {
