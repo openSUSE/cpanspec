@@ -192,6 +192,7 @@ use warnings;
 our $NAME="cpanspec";
 our $VERSION='1.78.04';
 
+use Module::CoreList;
 use FileHandle;
 use Archive::Tar;
 use Archive::Zip qw(:ERROR_CODES);
@@ -433,6 +434,16 @@ sub build_rpm($) {
             die "$rpmbuild exited with value " . WEXITSTATUS($?) . "\n";
         }
     }
+}
+
+sub is_in_core($$) {
+  my ($module, $version) = (@_);
+  return 1 if ($module eq 'perl');
+  my $release = Module::CoreList::first_release($module, $version);
+  return 0 unless $release;
+  # 10.1 is the minimum we care for
+  my $ret = $release <= 5.008008;
+  return $ret;
 }
 
 sub list_files($$) {
@@ -698,19 +709,6 @@ if ($follow and $buildrpm) {
 my $prefix=$noprefix ? "" : "perl-";
 
 $packager=$packager || `rpm --eval '\%packager'`;
-
-our %corelist;
-
-my $rpm=new FileHandle "rpm -q --provides perl|"
-    or warn "Failed to execute rpm: $!\n";
-
-while (my $provides=<$rpm>) {
-    chomp $provides;
-
-    if ($provides=~/^perl\(([^\)]+)\)(?:\s+=\s+(\S+))\s*$/) {
-        #$corelist{$1}=defined($2) ? $2 : 0;
-    }
-}
 
 my @args=@ARGV;
 my @processed=();
@@ -1000,9 +998,10 @@ for my $ofile (@args) {
                 $license="Non-distributable";
                 warn "License is 'restrictive'."
                     . "  This package should not be redistributed.\n";
+            } elsif ($meta->{license} =~ /^unknown$/i) {
+                # do nothing, it's unknown and we know
             } else {
                 warn "Unknown license '" . $meta->{license} . "'!\n";
-                $license=undef;
             }
         }
         SKIP:
@@ -1152,10 +1151,8 @@ END
     }
 
     for my $dep (sort(keys(%build_requires))) {
-        next if ($dep eq 'perl');
-        if (exists($corelist{$dep})) {
-            next if (!$compat);
-        } elsif ($follow) {
+        next if (is_in_core($dep, $build_requires{$dep}));
+        if ($follow) {
             if ($dep ne $module and !(grep { $_ eq $dep } @processed, @args)) {
                 print "dep: $dep\n";
                 if (check_dep($dep)) {
@@ -1177,8 +1174,7 @@ END
     }
 
     for my $dep (sort(keys(%requires))) {
-        next if ($dep eq 'perl');
-        next if (!$compat and exists($corelist{$dep}));
+        next if (is_in_core($dep, $requires{$dep}));
         printf $spec "%-16s%s", "Requires:", "perl($dep)";
         print $spec (" >= " . $requires{$dep}) if ($requires{$dep});
         print $spec "\n";
@@ -1193,13 +1189,12 @@ END
         printf $spec "%-16s%s\n", "Provides:", $prov;
     }
     for my $dep (sort(keys(%recommends))) {
+        next if (is_in_core($dep, $recommends{$dep}));
         next if ($dep eq 'perl');
-        next if (!$compat and exists($corelist{$dep}));
         printf $spec "%-16s%s", "Recommends:", "perl($dep)";
-        print $spec (" >= " . $requires{$dep}) if ($requires{$dep});
+        print $spec (" >= " . $recommends{$dep}) if ($recommends{$dep});
         print $spec "\n";
     }
-
  
 
     if (@filter_requires) {
