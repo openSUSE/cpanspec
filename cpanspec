@@ -436,9 +436,6 @@ sub is_in_core($$) {
   return 0 unless $release;
   # 10.1 is the minimum we care for
   my $ret = $release <= 5.008008;
-  if ($ret) {
-    verbose("skipping core module $module >= $version");
-  }
   return $ret;
 }
 
@@ -446,7 +443,6 @@ sub readfile($) {
     local $/=undef;
     my $filename = shift;
     die "empty filename" unless length($filename);
-    verbose "readfile $basedir$filename\n";
     open FILE, $basedir . $filename or return undef;
     binmode FILE;
     my $string = <FILE>;
