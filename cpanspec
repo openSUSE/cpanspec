@@ -208,7 +208,7 @@ use File::Basename;
 use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
-use File::Path qw(remove_tree);
+use File::Path qw(rmtree);
 use Module::Depends::Intrusive;
 
 # Apparently gets pulled in by another module.
@@ -1042,7 +1042,7 @@ for my $ofile (@args) {
        }
     }
 
-    remove_tree($basedir);
+    rmtree($basedir);
 
     print $spec <<END;
 #
