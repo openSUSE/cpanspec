@@ -763,6 +763,7 @@ for my $ofile (@args) {
  
     my @files = ();
     my $bogus=0;
+    my $execs=0;
     foreach my $entry (@archive_files) {
         if ($entry !~ /^(?:.\/)?($name-(?:v\.?)?$version)(?:\/|$)/) {
             warn "BOGUS PATH DETECTED: $entry\n";
@@ -776,6 +777,14 @@ for my $ofile (@args) {
         next if (!$entry);
 
         push(@files, $entry);
+
+	if (-x "$basedir$path/$entry" && -f "$basedir$path/$entry") {
+	    if ($entry !~ m/.pl$/) {
+		verbose("disable executables because of $entry");
+		$execs=1;
+	    }
+	}
+
     }
     if ($bogus) {
         warn "Skipping $file with $bogus path elements!\n";
@@ -998,6 +1007,10 @@ for my $ofile (@args) {
 
     $description=$summary if (!defined($description));
 
+    if (length($summary) > 79) {
+	$summary = substr($summary, 0, 72) . "[cut]";
+    }
+
     my $usebuildpl=0;
     if (grep /^Build\.PL$/, @files) {
         $build_requires{'Module::Build'}=0;
@@ -1060,6 +1073,13 @@ for my $ofile (@args) {
                 }
             }
         }
+    }
+
+    my %hdoc = ();
+    if (@doc) {
+       foreach my $d (@doc) { 
+          $hdoc{$d} = 1; 
+       }
     }
 
     remove_tree($basedir);
@@ -1203,6 +1223,10 @@ $description
 \%setup -q@{[($noprefix ? "" : " -n $buildpath")]}
 END
 
+    if ($execs) {
+	print $spec "find . -type f -print0 | xargs -0 chmod 644\n";
+    } 
+    
     if (@filter_requires) {
         print $spec <<'END';
 
@@ -1286,7 +1310,8 @@ perldoc -t perlartistic > Artistic
 
 END
 
-        push(@doc, "COPYING", "Artistic");
+        $hdoc{"COPYING"} = 1;
+        $hdoc{"Artistic"} = 1;
     }
 
     print $spec <<END;
@@ -1300,9 +1325,7 @@ END
 END
     print $spec "\%defattr(-,root,root,755)\n";
 
-    if (@doc) {
-       my %hdoc = ();
-       foreach my $d (@doc) { $hdoc{$d} = 1; }
+    if (%hdoc) {
        print $spec "%doc " . join(' ', sort(keys(%hdoc))) . "\n";
     }
 
