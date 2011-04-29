@@ -209,6 +209,8 @@ use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(remove_tree);
+use Module::Depends::Intrusive;
+
 # Apparently gets pulled in by another module.
 #use Cwd;
 
@@ -359,8 +361,11 @@ sub get_file($) {
     # Look up $file in 02packages.details.txt.
     verbose("Get file $file");
     update_packages();
-    $packages=Parse::CPAN::Packages->new($pkgdetails)
-        if (!defined($packages));
+    if (!defined($packages)) {
+	verbose "parsing packages";
+	$packages=Parse::CPAN::Packages->new($pkgdetails);
+	verbose "done";
+    }
     die "Parse::CPAN::Packages->new() failed: $!\n"
         if (!defined($packages));
     my ($m,$d);
@@ -387,8 +392,9 @@ sub get_source($) {
     verbose("Get source $file");
     # Look up $file in 02packages.details.txt.
     update_packages();
-    $packages=Parse::CPAN::Packages->new($pkgdetails)
-        if (!defined($packages));
+    if (!defined($packages)) {
+	$packages=Parse::CPAN::Packages->new($pkgdetails);
+    }
     die "Parse::CPAN::Packages->new() failed: $!\n"
         if (!defined($packages));
     my ($m,$d);
@@ -1019,60 +1025,14 @@ for my $ofile (@args) {
         $build_requires{'ExtUtils::MakeMaker'}=0;
     }
 
-    if (!$usebuildpl) {
-        # This is an ugly hack to parse any PREREQ_PM in Makefile.PL.
-        if (open(CHILD, "-|") == 0) {
-            eval {
-                use subs 'WriteMakefile';
-
-                sub WriteMakefile(@) {
-                    my %args=@_;
-
-                    if (!defined($args{'PREREQ_PM'})) {
-                        return;
-                    }
-
-                    # Versioned BuildRequires aren't reliably honored by
-                    # rpmbuild, but we'll include them anyway as a hint to the
-                    # packager.
-                    for my $dep (keys(%{$args{'PREREQ_PM'}})) {
-                        print "BuildRequires: $dep";
-                        print " " . $args{'PREREQ_PM'}->{$dep}
-                            if ($args{'PREREQ_PM'}->{$dep});
-                        print "\n";
-                    }
-                }
-            };
-
-            local $/=undef;
-
-            my $makefilepl=readfile("$path/Makefile.PL")
-                or warn "Failed to extract $path/Makefile.PL";
-
-            open(STDIN, ">/dev/null");
-            open(STDERR, ">/dev/null");
-            eval "no warnings;
-                  use subs qw(require die warn eval open close rename);
-                  BEGIN { sub require { 1; } }
-                  BEGIN { sub die { 1; } }
-                  BEGIN { sub warn { 1; } }
-                  BEGIN { sub eval { 1; } }
-                  BEGIN { sub open { 1; } }
-                  BEGIN { sub close { 1; } }
-                  BEGIN { sub rename { 1; } }
-                  $makefilepl";
-
-            exit 0;
-        } else {
-            while (<CHILD>) {
-                if (/^BuildRequires:\s*(\S+)\s*(\S+)?/) {
-                    my $dep=$1;
-                    my $version=0;
-                    $version=$2 if (defined($2));
-                    $build_requires{$dep}=$version;
-                }
-            }
-        }
+    my $deps = Module::Depends::Intrusive->new->dist_dir( $basedir . $path )->find_modules;
+    my %lrequires = %{$deps->requires};
+    foreach my $dep (keys(%lrequires)) {
+	$requires{$dep}=$lrequires{$dep};
+    }
+    %lrequires = %{$deps->build_requires};
+    foreach my $dep (keys(%lrequires)) {
+	$build_requires{$dep}=$lrequires{$dep};
     }
 
     my %hdoc = ();
