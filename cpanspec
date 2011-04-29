@@ -192,6 +192,13 @@ use warnings;
 our $NAME="cpanspec";
 our $VERSION='1.78.04';
 
+use Cwd;
+BEGIN {
+  my ($wd) = Cwd::abs_path($0) =~ m-(.*)/- ;
+  $wd ||= '.';
+  unshift @INC,  "$wd";
+}
+
 use Module::CoreList;
 use FileHandle;
 use Archive::Tar;
@@ -209,7 +216,7 @@ use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(rmtree);
-use Module::Depends::Intrusive;
+use Intrusive;
 
 # Apparently gets pulled in by another module.
 #use Cwd;
@@ -1025,7 +1032,7 @@ for my $ofile (@args) {
         $build_requires{'ExtUtils::MakeMaker'}=0;
     }
 
-    my $deps = Module::Depends::Intrusive->new->dist_dir( $basedir . $path )->find_modules;
+    my $deps = Intrusive->new->dist_dir( $basedir . $path )->find_modules;
     my %lrequires = %{$deps->requires};
     foreach my $dep (keys(%lrequires)) {
 	$requires{$dep}=$lrequires{$dep};
