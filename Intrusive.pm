@@ -49,7 +49,7 @@ sub _find_modules {
     # fake up Module::Build and ExtUtils::MakeMaker
     no warnings 'redefine';
     local *STDIN; # run non-interactive
-    close(STDIN);
+    local *STDOUT;
     local *ExtUtils::Liblist::ext = sub {
         my ($class, $lib) = @_;
         $lib =~ s/\-l//;
@@ -112,8 +112,11 @@ sub _find_modules {
         package main;
         no strict;
         no warnings;
+        $SIG{ALRM} = sub { die "Timeout"; };
+        alarm 5;
 	local $0 = $file;
         do "$file";
+        alarm 0;
     };
     $self->error( $@ ) if $@;
     delete $INC{$file};
