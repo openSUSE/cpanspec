@@ -796,6 +796,7 @@ for my $ofile (@args) {
 		verbose("disable executables because of $entry");
 		$execs=1;
 	    }
+	    chmod 0644, "$basedir$path/$entry";
 	}
 
     }

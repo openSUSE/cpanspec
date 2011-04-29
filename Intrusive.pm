@@ -44,9 +44,12 @@ sub _find_modules {
         return $self;
     }
 
+    # avoid downloads in configure!
+    $ENV{HTTP_PROXY}  = "http://9.9.9.9";
     # fake up Module::Build and ExtUtils::MakeMaker
     no warnings 'redefine';
     local *STDIN; # run non-interactive
+    close(STDIN);
     local *ExtUtils::Liblist::ext = sub {
         my ($class, $lib) = @_;
         $lib =~ s/\-l//;
