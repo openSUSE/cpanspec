@@ -133,6 +133,10 @@ sub y_n {
     return 0; # ok, we may say no when yes was intended, but we can't hang
 }
 
+package
+   Term::ReadLine;
+sub new { print "FAIL\n"; }
+
 1;
 
 __END__
