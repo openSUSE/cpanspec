@@ -190,7 +190,7 @@ use strict;
 use warnings;
 
 our $NAME="cpanspec";
-our $VERSION='1.78.04';
+our $VERSION='1.78.05';
 
 use Cwd;
 BEGIN {
@@ -792,7 +792,7 @@ for my $ofile (@args) {
         push(@files, $entry);
 
 	if (-x "$basedir$path/$entry" && -f "$basedir$path/$entry") {
-	    if ($entry !~ m/.pl$/) {
+	    if ($entry !~ m/.pl$/ && $entry !~ m,^bin/,) {
 		verbose("disable executables because of $entry");
 		$execs=1;
 	    }
@@ -858,6 +858,8 @@ for my $ofile (@args) {
     # special subdir
     push(@doc, "examples") if grep(/^examples\//, @files);
     push(@doc, "doc") if grep(/^doc\//, @files);
+    push(@doc, "util") if grep(/^util\//, @files);
+    push(@doc, "example") if grep(/^example\//, @files);
 
     my $date=strftime("%a %b %d %Y", localtime);
 

@@ -1,12 +1,12 @@
 ---
-name: cpanspec
-version: 1.78
+abstract: 'Generate a spec file for a CPAN module'
 author:
   - 'Steven Pritchard <steve@cpan.org>'
-abstract: Generate a spec file for a CPAN module
 license: perl
-resources:
-  license: http://dev.perl.org/licenses/
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: cpanspec
 requires:
   Archive::Tar: 0
   Archive::Zip: 0
@@ -22,7 +22,6 @@ requires:
   Text::Autoformat: 0
   YAML: 0
   locale: 0
-generated_by: Module::Build version 0.280801
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.2.html
-  version: 1.2
+resources:
+  license: http://dev.perl.org/licenses/
+version: 1.78.05

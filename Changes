@@ -1,3 +1,6 @@
+1.78.5 
+* convert from Build.PL to Makefile.PL
+
 1.78    2009-01-16
 
 * Fix up the license list some more.
