@@ -217,6 +217,7 @@ use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(rmtree);
 use Intrusive;
+use Perl::PrereqScanner;
 
 # Apparently gets pulled in by another module.
 #use Cwd;
@@ -1045,6 +1046,29 @@ for my $ofile (@args) {
 	$build_requires{$dep}=$lrequires{$dep};
     }
 
+    my %packages = ();
+
+    my $scanner = Perl::PrereqScanner->new;
+    foreach my $test (grep /\.(pm|t|PL|pl)/, @files) {
+	my $doc = PPI::Document->new($basedir . $path . "/" . $test);
+
+ 	# Get the name of the main package
+	my $pkg = $doc->find_first('PPI::Statement::Package');
+	if ($pkg) {
+	    $packages{$pkg->namespace} = 1;
+	}
+
+	my %scanneddeps = %{$scanner->scan_ppi_document($doc)->as_string_hash};
+	foreach my $dep (keys(%scanneddeps)) {
+	    my $ndep = $scanneddeps{$dep};
+	    unless ($build_requires{$dep} && $build_requires{$dep} > $ndep) {
+		$build_requires{$dep}=$scanneddeps{$dep};
+	    }
+	}
+    }
+
+    foreach my $pkg (keys %packages) { delete $build_requires{$pkg} };
+    
     my %hdoc = ();
     if (@doc) {
        foreach my $d (@doc) { 
