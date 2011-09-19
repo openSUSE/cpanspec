@@ -1350,6 +1350,15 @@ END
 END
 
     $spec->close();
+    my ($fh, $filename) = File::Temp::tempfile;
+    if (-x "/usr/lib/obs/service/format_spec_file.files/prepare_spec") {
+      if (!system("/usr/lib/obs/service/format_spec_file.files/prepare_spec '$specfile' > '$filename'")) {
+        # don't want to reimplement cross-device rename
+        system("mv '$filename' '$specfile'");
+      }
+    } else {
+      print STDERR "please install obs-service-format_spec_file\n";
+    }
 
     build_rpm($specfile) if ($buildsrpm or $buildrpm);
 
