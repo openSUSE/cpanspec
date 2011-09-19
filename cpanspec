@@ -1141,7 +1141,9 @@ END
     }
 
     my @treqs = sort(keys(%build_requires));
-    push(@treqs, sort(keys(%possible_build_requires)));
+    foreach my $dep (sort(keys(%possible_build_requires))) {
+       push(@treqs, $dep) if (!defined $build_requires{$dep});
+    }
     for my $dep (@treqs) {
         my $iscore = 0;
         eval { $iscore = is_in_core($dep, $build_requires{$dep}); };
