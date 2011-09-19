@@ -934,7 +934,7 @@ for my $ofile (@args) {
     $license=undef;
 
     my $scripts=0;
-    my (%build_requires,%requires,%recommends);
+    my (%build_requires,%requires,%recommends,%possible_build_requires);
     my ($yml,$meta);
     if (grep /^META\.yml$/, @files
         and $yml=readfile("$path/META.yml")) {
@@ -1052,6 +1052,8 @@ for my $ofile (@args) {
     foreach my $test (grep /\.(pm|t|PL|pl)/, @files) {
 	my $doc = PPI::Document->new($basedir . $path . "/" . $test);
 
+        next unless ($doc);
+
  	# Get the name of the main package
 	my $pkg = $doc->find_first('PPI::Statement::Package');
 	if ($pkg) {
@@ -1062,7 +1064,7 @@ for my $ofile (@args) {
 	foreach my $dep (keys(%scanneddeps)) {
 	    my $ndep = $scanneddeps{$dep};
 	    unless ($build_requires{$dep} && $build_requires{$dep} > $ndep) {
-		$build_requires{$dep}=$scanneddeps{$dep};
+                $possible_build_requires{$dep} = $scanneddeps{$dep};
 	    }
 	}
     }
@@ -1138,11 +1140,14 @@ END
         $build_requires{$dep}=$build_requires{$dep} || $requires{$dep};
     }
 
-    for my $dep (sort(keys(%build_requires))) {
-        next if (is_in_core($dep, $build_requires{$dep}));
+    my @treqs = sort(keys(%build_requires));
+    push(@treqs, sort(keys(%possible_build_requires)));
+    for my $dep (@treqs) {
+        my $iscore = 0;
+        eval { $iscore = is_in_core($dep, $build_requires{$dep}); };
+        next if $iscore;
         if ($follow) {
             if ($dep ne $module and !(grep { $_ eq $dep } @processed, @args)) {
-                print "dep: $dep\n";
                 if (check_dep($dep)) {
                     verbose("$dep is available, skipping.");
                 } else {
@@ -1151,9 +1156,15 @@ END
                 }
             }
         }
-        printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
-        print $spec (" >= " . $build_requires{$dep})
-            if ($build_requires{$dep});
+        if (defined $build_requires{$dep}) {
+          printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
+          print $spec (" >= " . $build_requires{$dep})
+              if ($build_requires{$dep});
+        } else { 
+          printf $spec "#%-15s%s", "BuildRequires:", "perl($dep)";
+          print $spec (" >= " . $possible_build_requires{$dep})
+              if ($possible_build_requires{$dep});
+        }
         print $spec "\n";
     }
 
@@ -1308,15 +1319,18 @@ END
         $hdoc{"Artistic"} = 1;
     }
 
-    print $spec <<END;
-
+   if (@filter_requires || @filter_provides) {
+     print $spec <<END;
 \%clean
 \%{__rm} -rf $macro{buildroot}@{[
     (@filter_requires ? ' %{__perl_requires}' : '') .
     (@filter_provides ? ' %{__perl_provides}' : '')]}
-
-\%files -f \%{name}.files
 END
+   } else {
+     print $spec "\n";
+   }
+
+    print $spec "\%files -f \%{name}.files\n";
     print $spec "\%defattr(-,root,root,755)\n";
 
     if (%hdoc) {
