@@ -190,7 +190,7 @@ use strict;
 use warnings;
 
 our $NAME="cpanspec";
-our $VERSION='1.78.05';
+our $VERSION='1.78.06';
 
 use Cwd;
 BEGIN {
