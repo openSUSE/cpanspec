@@ -197,6 +197,7 @@ BEGIN {
   my ($wd) = Cwd::abs_path($0) =~ m-(.*)/- ;
   $wd ||= '.';
   unshift @INC,  "$wd";
+  unshift @INC,  "$wd/lib";
 }
 
 use Module::CoreList;
@@ -225,7 +226,7 @@ use Perl::PrereqScanner;
 require Carp;
 
 $SIG{__DIE__} = sub {
-    Carp::confess("Died");
+#    Carp::confess("Died");
 };
 
 our %opt;
@@ -976,19 +977,19 @@ for my $ofile (@args) {
             # docs, cross referenced with the list of licenses in
             # /usr/share/rpmlint/config.
             if ($meta->{license} =~ /^perl$/i) {
-                $license="GPL+ or Artistic";
+                $license="Artistic-1.0 or GPL-1.0+";
             } elsif ($meta->{license} =~ /^apache$/i) {
                 $license="Apache Software License";
             } elsif ($meta->{license} =~ /^artistic$/i) {
-                $license="Artistic";
+                $license="Artistic-1.0";
             } elsif ($meta->{license} =~ /^artistic_?2$/i) {
-                $license="Artistic 2.0";
+                $license="Artistic-2.0";
             } elsif ($meta->{license} =~ /^bsd$/i) {
-                $license="BSD";
+                $license="BSD3c";
             } elsif ($meta->{license} =~ /^gpl$/i) {
-                $license="GPL+";
+                $license="GPL-1.0+";
             } elsif ($meta->{license} =~ /^lgpl$/i) {
-                $license="LGPLv2+";
+                $license="LGPL-2.1+";
             } elsif ($meta->{license} =~ /^mit$/i) {
                 $license="MIT";
             } elsif ($meta->{license} =~ /^mozilla$/i) {
