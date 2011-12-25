@@ -520,6 +520,7 @@ sub get_description($) {
            eval { $description .= $item->present('Pod::POM::View::Text'); };
         }
 
+	return $description=undef unless length($description);
         # no limit
         my @paragraphs = (split /\n\n/, $description);
 
