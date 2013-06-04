@@ -1032,7 +1032,7 @@ for my $ofile (@args) {
 
     my $usebuildpl=0;
     if (grep /^Build\.PL$/, @files) {
-        $build_requires{'Module::Build'}=0;
+        $build_requires{'Module::Build'} ||=0;
         $usebuildpl=1;
     } else {
         $build_requires{'ExtUtils::MakeMaker'}=0;
