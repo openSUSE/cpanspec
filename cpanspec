@@ -1031,9 +1031,14 @@ for my $ofile (@args) {
     }
 
     my $usebuildpl=0;
+    my $usebuildplt=0;
     if (grep /^Build\.PL$/, @files) {
-        $build_requires{'Module::Build'} ||=0;
         $usebuildpl=1;
+	if (defined $build_requires{'Module::Build::Tiny'}) {
+	   $usebuildplt=1;
+        } else {
+          $build_requires{'Module::Build'} ||=0;
+        }
     } else {
         $build_requires{'ExtUtils::MakeMaker'}=0;
     }
@@ -1264,7 +1269,13 @@ END
 \%build
 END
 
-    if ($usebuildpl) {
+    if ($usebuildplt) {
+        print $spec <<END;
+\%{__perl} Build.PL --installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
+./Build build --flags=\%{?_smp_mflags}
+
+END
+    } elsif ($usebuildpl) {
         print $spec <<END;
 \%{__perl} Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
 ./Build build flags=\%{?_smp_mflags}
@@ -1300,7 +1311,10 @@ END
 \%install
 END
 
-    if ($usebuildpl) {
+    if ($usebuildplt) {
+        print $spec
+           "./Build install --destdir=$macro{buildroot} --create_packlist=0\n";
+    } elsif ($usebuildpl) {
         print $spec
             "./Build install destdir=$macro{buildroot} create_packlist=0\n";
     } else {
