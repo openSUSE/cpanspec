@@ -1170,9 +1170,9 @@ END
           print $spec (" >= " . $build_requires{$dep})
               if ($build_requires{$dep});
         } else { 
-          printf $spec "#%-15s%s", "BuildRequires:", "perl($dep)";
-          print $spec (" >= " . $possible_build_requires{$dep})
-              if ($possible_build_requires{$dep});
+          #printf $spec "#%-15s%s", "BuildRequires:", "perl($dep)";
+          #print $spec (" >= " . $possible_build_requires{$dep})
+          #    if ($possible_build_requires{$dep});
         }
         print $spec "\n";
     }
