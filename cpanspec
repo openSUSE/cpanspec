@@ -1169,12 +1169,12 @@ END
           printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
           print $spec (" >= " . $build_requires{$dep})
               if ($build_requires{$dep});
+          print $spec "\n";
         } else { 
           #printf $spec "#%-15s%s", "BuildRequires:", "perl($dep)";
           #print $spec (" >= " . $possible_build_requires{$dep})
           #    if ($possible_build_requires{$dep});
         }
-        print $spec "\n";
     }
 
     for my $dep (sort @add_buildrequires) {
