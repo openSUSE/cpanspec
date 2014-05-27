@@ -1014,7 +1014,7 @@ for my $ofile (@args) {
        get_license($content);
        if ($license && ($license =~ /under the same terms as Perl itself/ || 
            $license =~ /under the terms of the Perl artistic license/)) {
-          $license = "GPL+ or Artistic";
+          $license = "GPL-1.0+ or Artistic-1.0";
        }
     }
 
@@ -1022,7 +1022,7 @@ for my $ofile (@args) {
       $summary="$module Perl module";
     }
 
-    $license="CHECK(GPL+ or Artistic)" if (!$license);
+    $license="CHECK(GPL-1.0+ or Artistic-1.0)" if (!$license);
 
     $description=$summary if (!defined($description));
 
