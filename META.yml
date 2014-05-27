@@ -35,4 +35,4 @@ recommends:
   IO::Uncompress::Bunzip2: 0
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.78.07
+version: 1.78.08
