@@ -880,6 +880,7 @@ for my $ofile (@args) {
             and $_ ne "INSTALL"
             and $_ ne "SIGNATURE"
 	    and !/^META\..+$/i
+	    and !/^MYMETA\..+$/i
             and $_ ne "NINJA"
             and $_ ne "c"
             and $_ ne "configure"
@@ -1020,13 +1021,13 @@ for my $ofile (@args) {
             if ($meta->{license} =~ /^perl$/i) {
                 $license="Artistic-1.0 or GPL-1.0+";
             } elsif ($meta->{license} =~ /^apache$/i) {
-                $license="Apache Software License";
+                $license="Apache-2.0";
             } elsif ($meta->{license} =~ /^artistic$/i) {
                 $license="Artistic-1.0";
             } elsif ($meta->{license} =~ /^artistic_?2$/i) {
                 $license="Artistic-2.0";
             } elsif ($meta->{license} =~ /^bsd$/i) {
-                $license="BSD3c";
+                $license="BSD-3-Clause";
             } elsif ($meta->{license} =~ /^gpl$/i) {
                 $license="GPL-1.0+";
             } elsif ($meta->{license} =~ /^lgpl$/i) {
@@ -1038,13 +1039,14 @@ for my $ofile (@args) {
             } elsif ($meta->{license} =~ /^open_source$/i) {
                 $license="OSI-Approved"; # rpmlint will complain
             } elsif ($meta->{license} =~ /^restrictive$/i) {
-                $license="Non-distributable";
+                $license="SUSE-NonFree";
                 warn "License is 'restrictive'."
                     . "  This package should not be redistributed.\n";
             } elsif ($meta->{license} =~ /^unknown$/i) {
                 # do nothing, it's unknown and we know
             } else {
                 warn "Unknown license '" . $meta->{license} . "'!\n";
+		exit(1);
             }
         }
         SKIP:

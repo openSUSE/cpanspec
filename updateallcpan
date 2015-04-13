@@ -15,6 +15,7 @@ use XML::Simple;
 use Data::Dumper;
 use Compress::Zlib;
 use version;
+use List::Util;
 
 require CPAN::Meta::Requirements;
 use File::Temp qw/tempdir/;
@@ -39,7 +40,7 @@ close(DETAILS);
 
 my $requests = 0;
 
-for my $pkg (sort keys %$xml) {
+for my $pkg (List::Util::shuffle(keys %$xml)) {
     next unless $pkg =~ m,^perl-,;
     my $ups = $pkg;
     $ups =~ s,^perl-,,;
@@ -66,8 +67,8 @@ for my $pkg (sort keys %$xml) {
       or next;
     system("osc ci -mupdate") == 0
       or next;
-    system("osc sr -m update --clean < /dev/null");
+    #system("osc sr -m update --clean < /dev/null");
     print "SHELL $tempdir\n";
     chdir("/tmp");
-    exit(1) if ($requests++ > 10);
+    exit(1) if ($requests++ > 3000);
 }
