@@ -246,6 +246,7 @@ our $verbose=0;
 our $follow=0;
 our $macros=1;
 our $skip_changes=0;
+our $old_file;
 our $cpan=$ENV{'CPAN'} || "http://www.cpan.org";
 
 our $home=$ENV{'HOME'} || (getpwuid($<))[7];
@@ -658,6 +659,35 @@ sub check_dep($) {
     return (check_rpm("perl($module)") || check_repo("perl($module)"));
 }
 
+sub extract_old_changes($$) {
+    my ($archive, $filename) = @_;
+
+    my $tar = Archive::Tar->new;
+    $tar->read($archive, 1, { filter => qr/\Q$filename\E$/ } );
+    my @cfile = $tar->list_files();
+    return $tar->get_content($cfile[0]);
+}
+
+sub diff_changes($$) {
+    my @old_changes = split qr/\n/, shift;
+    my @changes = split qr/\n/, shift;
+
+    #print $old_changes, $changes;
+    use Algorithm::Diff qw/sdiff/;
+    my $diff = Algorithm::Diff->new( \@old_changes, \@changes );
+
+    # ignore common prefix
+    while(  $diff->Next()  ) {
+	last unless $diff->Same();
+    }
+
+    if(  $diff->Items(2) && ! $diff->Items(1) ) {
+	my $changesdiff = '';
+	$changesdiff .= "  $_\n"  for  $diff->Items(2);
+	return $changesdiff;
+    }
+}
+
 # Set locale to en_US.UTF8 so that dates in changelog will be correct
 # if using another locale. Also ensures writing out UTF8. (Thanks to
 # Roy-Magne Mo for pointing out the problem and providing a solution.)
@@ -684,6 +714,7 @@ GetOptions(
         'add-provides=s'    => \@add_provides,
         'add-buildrequires=s' => \@add_buildrequires,
         'skip-changes'      => \$skip_changes,
+	'old-file=s'        => \$old_file,
         'version'           => \&print_version,
         'prefer-macros|m'   => \$macros,
     ) or pod2usage({ -exitval => 1, -verbose => 0 });
@@ -701,7 +732,9 @@ if ($follow and $buildrpm) {
 
 my $prefix=$noprefix ? "" : "perl-";
 
-$packager=$packager || `rpm --eval '\%packager'`;
+#$packager=$packager || `rpm --eval '\%packager'`;
+my $defaultdocdir = `rpm --eval '\%_defaultdocdir'`;
+chomp $defaultdocdir;
 
 my @args=@ARGV;
 my @processed=();
@@ -765,7 +798,7 @@ for my $ofile (@args) {
             $ext = '.bz2';
         }
 	my $next = Archive::Tar->iter( $f, 1, { prefix => "/tmp/tar" });
-	
+
 	while( my $f = $next->() ) {
 	    push(@archive_files, $f->full_path);
 	    $f->extract($basedir . $f->full_path) or warn "Extraction failed " . $f->full_path;
@@ -780,6 +813,8 @@ for my $ofile (@args) {
     my @files = ();
     my $bogus=0;
     my $execs=0;
+    my $changes;
+    my $changesfile;
     foreach my $entry (@archive_files) {
         if ($entry !~ /^(?:.\/)?($name-(?:v\.?)?$version)(?:\/|$)/) {
             warn "BOGUS PATH DETECTED: $entry\n";
@@ -789,10 +824,16 @@ for my $ofile (@args) {
             $path=$1;
         }
 
-        $entry=~s,^(?:.\/)?$name-(?:v\.?)?$version/,,;
+	$entry=~s,^(?:.\/)?$name-(?:v\.?)?$version/,,;
         next if (!$entry);
 
         push(@files, $entry);
+
+	my $candidate = lc $entry;
+	if (!$changes && ($candidate =~ m/^changes/ || $candidate =~ m/^changelog/ || $candidate =~ m/^history/)) {
+	    $changesfile = $entry;
+	    $changes = readfile("$path/$entry");
+	}
 
 	if (-x "$basedir$path/$entry" && -f "$basedir$path/$entry") {
 	    if ($entry !~ m/.pl$/ && $entry !~ m,^bin/,) {
@@ -824,34 +865,33 @@ for my $ofile (@args) {
     get_description($content) if(!defined($description));
 
     get_summary($content,$module) if (!defined($summary));
-    
+
     get_author($content) if (!defined($author));
 
     my $authors="Authors:\n--------\n$author";
 
     my @doc=sort { $a cmp $b } grep {
                 !/\//
-            and !/\.(pl|xs|h|c|pm|in|pod|cfg|inl|bak)$/i
+            and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak)$/i
             and !/^\./
             and $_ ne $path
             and $_ ne "MANIFEST"
             and $_ ne "MANIFEST.SKIP"
             and $_ ne "INSTALL"
             and $_ ne "SIGNATURE"
-            and $_ ne "META.json"
-            and $_ ne "META.yml"
+	    and !/^META\..+$/i
             and $_ ne "NINJA"
             and $_ ne "c"
             and $_ ne "configure"
             and $_ ne "config.guess"
             and $_ ne "config.sub"
-            and $_ ne "dist.ini"
             and $_ ne "typemap"
             and $_ ne "bin"
             and $_ ne "lib"
             and $_ ne "t"
             and $_ ne "inc"
             and $_ ne "autobuild.sh"
+	    and $_ ne "cpanfile"
             and $_ ne "perlcriticrc"
             and $_ ne "perltidyrc"
             and $_ ne "pm_to_blib"
@@ -1381,15 +1421,24 @@ END
     push(@processed, $module);
 
     if (!$skip_changes) {
-      (my $basename = $specfile) =~ s{\.spec$}{};
-      if (-f "$basename.changes") {
-        verbose "Updating $basename.changes";
-        system("osc vc -m 'updated to $version' $basename.changes");
-      } else {
-        verbose "Writing $basename.changes";
-        system("osc vc -m 'initial package $version
-    * created by $NAME $VERSION' $basename.changes");
-      }
+	(my $basename = $specfile) =~ s{\.spec$}{};
+
+	my $changes_diff;
+
+	my ($tfh, $tmpfile) = File::Temp::tempfile;
+	my $oldfh = select $tfh;
+
+	if (-f "$basename.changes") {
+	    print "updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
+	    if ($old_file && $changes) {
+		my $old_changes = extract_old_changes($old_file, $changesfile);
+		print diff_changes($old_changes, $changes) if $old_changes;
+	    }
+	} else {
+	    print 'initial package $version\n * created by $NAME $VERSION';
+	}
+	system("osc vc -F $tmpfile $basename.changes");
+	select($oldfh);
    }
 }
 

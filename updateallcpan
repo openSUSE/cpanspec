@@ -1,5 +1,14 @@
 #! /usr/bin/perl
 
+# Copyright (C) 2015 Stephan Kulow <coolo@suse.com>
+
+# This program is free software; you can redistribute it
+# and/or modify it under the same terms as Perl itself.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
 use strict;
 use warnings;
 use XML::Simple;
@@ -28,6 +37,8 @@ while ( <DETAILS> ) {
 }
 close(DETAILS);
 
+my $requests = 0;
+
 for my $pkg (sort keys %$xml) {
     next unless $pkg =~ m,^perl-,;
     my $ups = $pkg;
@@ -40,7 +51,7 @@ for my $pkg (sort keys %$xml) {
     my $older = $obs_version < $upstream{$ups}[0];
     next unless $older;
     print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') .  "\n";
-    my $tempdir = tempdir( CLEANUP => 1 );
+    my $tempdir = tempdir; # ( CLEANUP => 1 );
     chdir($tempdir);
     system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
       or next;
@@ -49,12 +60,14 @@ for my $pkg (sort keys %$xml) {
 	unlink($tar);
     }
     system("wget -q http://search.cpan.org/CPAN/authors/id/$upstream{$ups}[1]");
-    system("~coolo/prod/cpanspec/cpanspec -f *.tar*");
-    system("osc addremove");
-    system("osc ci -mupdate");
+    system("~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
+      or next;
+    system("osc addremove") == 0
+      or next;
+    system("osc ci -mupdate") == 0
+      or next;
     system("osc sr -m update --clean < /dev/null");
     print "SHELL $tempdir\n";
     chdir("/tmp");
-
-    exit(1);
+    exit(1) if ($requests++ > 10);
 }
