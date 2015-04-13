@@ -1,0 +1,60 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+use XML::Simple;
+use Data::Dumper;
+use Compress::Zlib;
+use version;
+
+require CPAN::Meta::Requirements;
+use File::Temp qw/tempdir/;
+
+# https://build.opensuse.org/status/project/devel:languages:perl
+my $xml = XMLin('/tmp/dlp')->{package};
+
+my $modpath = glob("~/.cpan/sources/modules");
+my $details = "02packages.details.txt.gz";
+chdir($modpath) || die "call cpan once to create $modpath";
+system("wget -qm -nd http://www.cpan.org/modules/$details");
+
+my %upstream;
+open(DETAILS, "zcat $modpath/$details|");
+while ( <DETAILS> ) {
+    chomp;
+    if (m!^(\S+)\s+([\w\.]+)\s+(\S*)!m) {
+	eval { $upstream{$1} = [version->parse($2), $3]; }
+    }
+}
+close(DETAILS);
+
+for my $pkg (sort keys %$xml) {
+    next unless $pkg =~ m,^perl-,;
+    my $ups = $pkg;
+    $ups =~ s,^perl-,,;
+    $ups =~ s,-,::,g;
+    next unless  defined($upstream{$ups}[0]);
+    my $obs_version;
+    eval { $obs_version = version->parse($xml->{$pkg}->{version}); };
+    next unless $obs_version;
+    my $older = $obs_version < $upstream{$ups}[0];
+    next unless $older;
+    print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') .  "\n";
+    my $tempdir = tempdir( CLEANUP => 1 );
+    chdir($tempdir);
+    system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
+      or next;
+    chdir("devel:languages:perl:autoupdate/$pkg") || die "can't chdir";
+    for my $tar (glob("*.tar*")) {
+	unlink($tar);
+    }
+    system("wget -q http://search.cpan.org/CPAN/authors/id/$upstream{$ups}[1]");
+    system("~coolo/prod/cpanspec/cpanspec -f *.tar*");
+    system("osc addremove");
+    system("osc ci -mupdate");
+    system("osc sr -m update --clean < /dev/null");
+    print "SHELL $tempdir\n";
+    chdir("/tmp");
+
+    exit(1);
+}
