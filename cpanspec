@@ -1071,6 +1071,7 @@ for my $ofile (@args) {
     if (length($summary) > 79) {
 	$summary = substr($summary, 0, 72) . "[cut]";
     }
+    $summary =~ s,\.$,,;
 
     my $usebuildpl=0;
     my $usebuildplt=0;
