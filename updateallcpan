@@ -20,8 +20,9 @@ use List::Util;
 require CPAN::Meta::Requirements;
 use File::Temp qw/tempdir/;
 
-# https://build.opensuse.org/status/project/devel:languages:perl
-my $xml = XMLin('/tmp/dlp')->{package};
+open(my $statusfh, "curl -s https://build.opensuse.org/status/project/devel:languages:perl|");
+my $xml = XMLin($statusfh)->{package};
+close($statusfh);
 
 my $modpath = glob("~/.cpan/sources/modules");
 my $details = "02packages.details.txt.gz";
@@ -40,7 +41,9 @@ close(DETAILS);
 
 my $requests = 0;
 
-for my $pkg (List::Util::shuffle(keys %$xml)) {
+my @pkgs = List::Util::shuffle(keys %$xml);
+@pkgs = sort keys %$xml;
+for my $pkg (@pkgs) {
     next unless $pkg =~ m,^perl-,;
     my $ups = $pkg;
     $ups =~ s,^perl-,,;
@@ -54,21 +57,48 @@ for my $pkg (List::Util::shuffle(keys %$xml)) {
     print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') .  "\n";
     my $tempdir = tempdir; # ( CLEANUP => 1 );
     chdir($tempdir);
+    
+    # exit(0) means it exists, so skip it
+    system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
+
+    #system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
     system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
       or next;
     chdir("devel:languages:perl:autoupdate/$pkg") || die "can't chdir";
     for my $tar (glob("*.tar*")) {
 	unlink($tar);
     }
-    system("wget -q http://search.cpan.org/CPAN/authors/id/$upstream{$ups}[1]");
+    system("wget -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$upstream{$ups}[1]");
+    #print "~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*\n";
     system("~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
       or next;
     system("osc addremove") == 0
       or next;
     system("osc ci -mupdate") == 0
       or next;
-    #system("osc sr -m update --clean < /dev/null");
+    while (1) {
+	open(my $fh, "curl -s https://build.opensuse.org/build/devel:languages:perl:autoupdate/_result?package=$pkg|");
+	my $res = XMLin($fh);
+	print Dumper($res);
+	close($fh);
+	my $code = 'unscheduled';
+	if ($res && $res->{result}->{status}) {
+	    $code = $res->{result}->{status}->{code};
+	    if ($code && $code eq 'finished') {
+		$code = $res->{result}->{status}->{details} || 'unknown';
+	    }
+	}
+	if ($code eq 'succeeded') {
+	    system("osc sr -m 'automatic update' --clean < /dev/null");
+	    exit(1) if ($requests++ > 50);
+	    last;
+	}
+	last if ($code eq 'failed' || $code eq 'unresolvable');
+	print "CODE $code\n";
+	sleep(5);
+    }
     print "SHELL $tempdir\n";
     chdir("/tmp");
-    exit(1) if ($requests++ > 3000);
+    #exit(1);
+    #exit(1) if ($requests++ > 5);
 }

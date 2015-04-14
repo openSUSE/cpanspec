@@ -894,11 +894,13 @@ for my $ofile (@args) {
             and $_ ne "bin"
             and $_ ne "lib"
             and $_ ne "t"
+	    and $_ ne "xt"
             and $_ ne "inc"
+	    and $_ ne "dist.ini.meta"
             and $_ ne "autobuild.sh"
 	    and $_ ne "cpanfile"
-            and $_ ne "perlcriticrc"
-            and $_ ne "perltidyrc"
+            and !/^perlcritic/
+	    and $_ ne "perltidyrc"
             and $_ ne "pm_to_blib"
             and $_ ne "install.sh"
             } @files;
@@ -1049,7 +1051,7 @@ for my $ofile (@args) {
             } elsif ($meta->{license} =~ /^unknown$/i) {
                 # do nothing, it's unknown and we know
             } else {
-                warn "Unknown license '" . $meta->{license} . "'!\n";
+                warn "Unknown license in meta '" . $meta->{license} . "'!\n";
 		exit(1);
             }
         }
@@ -1059,7 +1061,9 @@ for my $ofile (@args) {
     if (!defined($license)) {
        get_license($content);
        if ($license && ($license =~ /under the same terms as Perl itself/ || 
-           $license =~ /under the terms of the Perl artistic license/)) {
+			$license =~ /under the terms of the Perl artistic license/ ||
+			$license =~ qr/free software.*dev.perl.org.* for more information/
+		      )) {
           $license = "GPL-1.0+ or Artistic-1.0";
        }
     }
