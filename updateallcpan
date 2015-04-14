@@ -39,66 +39,82 @@ while ( <DETAILS> ) {
 }
 close(DETAILS);
 
-my $requests = 0;
+my $tocreate = 200;
 
 my @pkgs = List::Util::shuffle(keys %$xml);
-@pkgs = sort keys %$xml;
-for my $pkg (@pkgs) {
-    next unless $pkg =~ m,^perl-,;
-    my $ups = $pkg;
-    $ups =~ s,^perl-,,;
-    $ups =~ s,-,::,g;
-    next unless  defined($upstream{$ups}[0]);
-    my $obs_version;
-    eval { $obs_version = version->parse($xml->{$pkg}->{version}); };
-    next unless $obs_version;
-    my $older = $obs_version < $upstream{$ups}[0];
-    next unless $older;
-    print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') .  "\n";
-    my $tempdir = tempdir; # ( CLEANUP => 1 );
-    chdir($tempdir);
-    
-    # exit(0) means it exists, so skip it
-    system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
-
-    #system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
-    system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
-      or next;
-    chdir("devel:languages:perl:autoupdate/$pkg") || die "can't chdir";
-    for my $tar (glob("*.tar*")) {
-	unlink($tar);
-    }
-    system("wget -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$upstream{$ups}[1]");
-    #print "~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*\n";
-    system("~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
-      or next;
-    system("osc addremove") == 0
-      or next;
-    system("osc ci -mupdate") == 0
-      or next;
-    while (1) {
-	open(my $fh, "curl -s https://build.opensuse.org/build/devel:languages:perl:autoupdate/_result?package=$pkg|");
-	my $res = XMLin($fh);
-	print Dumper($res);
+#@pkgs = sort keys %$xml;
+my %tobuild;
+while ( (@pkgs && $tocreate) || %tobuild ) {
+    if (%tobuild) {
+	my $url = "https://build.opensuse.org/build/devel:languages:perl:autoupdate/_result?";
+	my @tocheck = sort keys %tobuild;
+	$url .= "package=" . shift @tocheck;
+	$url .= "&package=$_" for (@tocheck);
+	print "checking '$url'\n";
+	open(my $fh, "curl -s '$url'|");
+	my $res = XMLin($fh, forcearray => [ qw/status/ ]);
+	#print Dumper($res);
 	close($fh);
-	my $code = 'unscheduled';
+
 	if ($res && $res->{result}->{status}) {
-	    $code = $res->{result}->{status}->{code};
-	    if ($code && $code eq 'finished') {
-		$code = $res->{result}->{status}->{details} || 'unknown';
+	    for my $status (@{$res->{result}->{status}}) {
+		my $code = $status->{code} || 'unscheduled';
+		if ($code && $code eq 'finished') {
+		    $code = $status->{details} || 'unknown';
+		}
+		my $built = $status->{package};
+		print "CODE $built $code\n";
+		if ($code eq 'succeeded') {
+		    system("osc sr -m 'automatic update' devel:languages:perl:autoupdate $built devel:languages:perl --clean < /dev/null");
+		    delete $tobuild{$built};
+		}
+		if ($code eq 'failed' || $code eq 'unresolvable') {
+		    delete $tobuild{$built};
+		}
 	    }
 	}
-	if ($code eq 'succeeded') {
-	    system("osc sr -m 'automatic update' --clean < /dev/null");
-	    exit(1) if ($requests++ > 50);
-	    last;
+    }
+    if ($tocreate) {
+	my $pkg = shift @pkgs;
+	next unless $pkg =~ m,^perl-,;
+	my $ups = $pkg;
+	$ups =~ s,^perl-,,;
+	$ups =~ s,-,::,g;
+	next unless  defined($upstream{$ups}[0]);
+	my $obs_version;
+	eval { $obs_version = version->parse($xml->{$pkg}->{version}); };
+	next unless $obs_version;
+	my $older = $obs_version < $upstream{$ups}[0];
+	next unless $older;
+	print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') .  "\n";
+	my $tempdir = tempdir; # ( CLEANUP => 1 );
+	chdir($tempdir);
+
+	# exit(0) means it exists, so skip it
+	system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
+
+	#system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
+	system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
+	  or next;
+	$tocreate--;
+	chdir("devel:languages:perl:autoupdate/$pkg") || die "can't chdir";
+	for my $tar (glob("*.tar*")) {
+	    unlink($tar);
 	}
-	last if ($code eq 'failed' || $code eq 'unresolvable');
-	print "CODE $code\n";
+	system("wget -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$upstream{$ups}[1]");
+	#print "~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*\n";
+	system("~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
+	  or next;
+	system("osc addremove") == 0
+	  or next;
+	system("osc ci -mupdate") == 0
+	  or next;
+	$tobuild{$pkg} = 1;
+	print "SHELL $tempdir\n";
+	chdir("/tmp");
+    } else {
 	sleep(5);
     }
-    print "SHELL $tempdir\n";
-    chdir("/tmp");
     #exit(1);
     #exit(1) if ($requests++ > 5);
 }

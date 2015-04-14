@@ -1042,8 +1042,8 @@ for my $ofile (@args) {
                 $license="MIT";
             } elsif ($meta->{license} =~ /^mozilla$/i) {
                 $license="MPL";
-            } elsif ($meta->{license} =~ /^open_source$/i) {
-                $license="OSI-Approved"; # rpmlint will complain
+            } elsif ($meta->{license} =~ /^open_source$/i || $meta->{license} =~ /^unrestricted$/i) {
+                $license="SUSE-PublicDomain"; # rpmlint will complain
             } elsif ($meta->{license} =~ /^restrictive$/i) {
                 $license="SUSE-NonFree";
                 warn "License is 'restrictive'."
