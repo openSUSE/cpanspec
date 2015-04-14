@@ -681,11 +681,15 @@ sub diff_changes($$) {
 	last unless $diff->Same();
     }
 
+    #use Data::Dumper;
+    #print Dumper($diff);
+
     if(  $diff->Items(2) && ! $diff->Items(1) ) {
 	my $changesdiff = '';
 	$changesdiff .= "  $_\n"  for  $diff->Items(2);
 	return $changesdiff;
     }
+    return '';
 }
 
 # Set locale to en_US.UTF8 so that dates in changelog will be correct
@@ -872,7 +876,7 @@ for my $ofile (@args) {
 
     my @doc=sort { $a cmp $b } grep {
                 !/\//
-            and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak)$/i
+            and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak|spec)$/i
             and !/^\./
             and $_ ne $path
             and $_ ne "MANIFEST"
