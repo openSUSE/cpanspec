@@ -1051,7 +1051,7 @@ for my $ofile (@args) {
             } elsif ($meta->{license} =~ /^mozilla$/i) {
                 $license="MPL";
             } elsif ($meta->{license} =~ /^open_source$/i || $meta->{license} =~ /^unrestricted$/i) {
-                $license="SUSE-PublicDomain"; # rpmlint will complain
+                $license="SUSE-Public-Domain"; # rpmlint will complain
             } elsif ($meta->{license} =~ /^restrictive$/i) {
                 $license="SUSE-NonFree";
                 warn "License is 'restrictive'."
@@ -1225,7 +1225,12 @@ END
 	}
     }
 
-    printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
+    if ($config->{skip_noarch}) {
+	printf $spec "# MANUAL\n#%-15s%s\n", "BuildArch:", "noarch" if $noarch;
+	$noarch = undef;
+    } else {
+	printf $spec "%-16s%s\n", "BuildArch:", "noarch" if $noarch;
+    }
     print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
 
     printf $spec "%-16s%s\n", "BuildRequires:", "perl";

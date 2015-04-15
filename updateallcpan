@@ -39,7 +39,7 @@ while ( <DETAILS> ) {
 }
 close(DETAILS);
 
-my $tocreate = 10;
+my $tocreate = 30;
 
 my @pkgs = List::Util::shuffle(keys %$xml);
 #@pkgs = sort keys %$xml;

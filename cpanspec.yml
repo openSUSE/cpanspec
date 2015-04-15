@@ -13,3 +13,4 @@
 # hunspell=`pkg-config --libs hunspell | sed -e 's,-l,,; s,  *,,g'`
 # sed -i -e "s,hunspell-X,$hunspell," t/00-prereq.t Makefile.PL 
 #license: SUSE-NonFree
+#skip_noarch: 1
