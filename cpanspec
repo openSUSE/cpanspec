@@ -1385,6 +1385,9 @@ END
 \%build
 END
 
+    if ($config->{custom_build}) {
+	    print $spec $config->{custom_build} . "\n";
+    } else {
     if ($usebuildplt) {
         print $spec <<END;
 \%{__perl} Build.PL --installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
@@ -1410,6 +1413,7 @@ END
 \%{__make} \%{?_smp_mflags}
 
 END
+    }
     }
 
     print $spec <<END;
@@ -1468,6 +1472,12 @@ END
    } else {
      print $spec "\n";
    }
+   if ($config->{post_install}) {
+        print $spec "# MANUAL BEGIN\n";
+        chomp $config->{post_install};
+        print $spec $config->{post_install};
+        print $spec "\n# MANUAL END\n";
+    }
 
     print $spec "\%files -f \%{name}.files\n";
     print $spec "\%defattr(-,root,root,755)\n";
