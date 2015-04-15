@@ -515,7 +515,6 @@ sub get_description {
     HEAD1:
     foreach my $head1 ($pom->head1) {
 
-	print "HEAD " . $head1->title . "\n";
         next HEAD1 unless $head1->title eq $title;
 
         $description = '';
@@ -1180,9 +1179,13 @@ Release:        $release
 END
 
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
-
+    if ($config->{license}) {
+	print $spec "#Upstream: $license\n";
+	print $spec "License:   $config->{license}\n";
+    } else {
+	print $spec "License:   $license\n";
+    }
     print $spec <<END;
-License:        $license
 %define cpan_name $name
 Summary:        $summary
 Url:            $url
@@ -1192,21 +1195,30 @@ END
     $sfile=~s/$version/\%{version}/;
     $sfile=~s/$name/\%{cpan_name}/;
 
+    my $counter = 0;
     if ($source) {
 	if (basename($source) eq $sfile) {
-	    print $spec "Source:         $source\n";
+	    print $spec "Source$counter:         $source\n";
 	} else {
-	    print $spec "#Source:        $source\n";
-	    print $spec "Source:         $ofile\n";
+	    print $spec "#Source$counter:        $source\n";
+	    print $spec "Source$counter:         $ofile\n";
 	}
     } else {
-	print $spec "Source:         $ofile\n";
+	print $spec "Source$counter:         $ofile\n";
+    }
+    $counter++;
+
+    if ($config->{sources}) {
+	for my $s (@{$config->{sources}}) {
+	    print $spec "Source$counter:         $s\n";
+	    $counter++;
+	}
     }
     if ($config_file) {
-	print $spec "Source1:     $config_file\n";
+	print $spec "Source$counter:     $config_file\n";
     }
     if ($config->{patches}) {
-	my $counter = 0;
+	$counter = 0;
 	for my $p (sort keys %{$config->{patches}}) {
 	    print $spec "Patch$counter:   $p\n";
 	    $counter++;
@@ -1302,10 +1314,10 @@ END
 
     print $spec "%{perl_requires}\n";
     if ($config->{preamble}) {
-	print $spec "#MANUAL BEGIN\n";
+	print $spec "# MANUAL BEGIN\n";
 	chomp $config->{preamble};
 	print $spec $config->{preamble};
-	print $spec "\n#MANUAL END\n";
+	print $spec "\n# MANUAL END\n";
     }
 
     my $buildpath=$path;
@@ -1357,10 +1369,10 @@ END
     }
 
     if ($config->{post_prep}) {
-	print $spec "#MANUAL BEGIN\n";
+	print $spec "# MANUAL BEGIN\n";
 	chomp $config->{post_prep};
 	print $spec $config->{post_prep};
-	print $spec "\n#MANUAL END\n";
+	print $spec "\n# MANUAL END\n";
     }
 
     print $spec <<END;
@@ -1496,6 +1508,7 @@ END
 	    print "updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
 	    if ($old_file && $changes) {
 		my $old_changes = extract_old_changes($old_file, $changesfile);
+		$old_changes =~ s,\r\n,\n,g;
 		print diff_changes($old_changes, $changes) if $old_changes;
 	    }
 	} else {
