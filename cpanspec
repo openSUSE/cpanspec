@@ -504,8 +504,9 @@ sub get_content(%) {
     }
 }
 
-sub get_description($) {
+sub get_description {
     my $cont = shift;
+    my $title = shift || 'DESCRIPTION';
     my $parser = Pod::POM->new;
 
     # extract pod; the file may contain no pod, that's ok
@@ -514,11 +515,11 @@ sub get_description($) {
     HEAD1:
     foreach my $head1 ($pom->head1) {
 
-        next HEAD1 unless $head1->title eq 'DESCRIPTION';
+	print "HEAD " . $head1->title . "\n";
+        next HEAD1 unless $head1->title eq $title;
 
         $description = '';
         foreach my $item ($head1->content()) {
-	    print Dump($item);
            last if ($item->type() eq 'head2');
            eval { $description .= $item->present('Pod::POM::View::Text'); };
         }
@@ -870,7 +871,9 @@ for my $ofile (@args) {
             path        => $path,
         );
 
-    get_description($content) if(!defined($description));
+    if (!$description) {
+	get_description($content) || get_description($content, 'OVERVIEW');
+    }
 
     get_summary($content,$module) if (!defined($summary));
 
