@@ -68,13 +68,13 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 		    system("osc sr -m 'automatic update' devel:languages:perl:autoupdate $built devel:languages:perl --clean < /dev/null");
 		    delete $tobuild{$built};
 		}
-		if ($code eq 'failed' || $code eq 'unresolvable') {
+		if ($code eq 'failed' || $code eq 'unresolvable' || $code eq 'broken') {
 		    delete $tobuild{$built};
 		}
 	    }
 	}
     }
-    if ($tocreate) {
+    if ($tocreate && @pkgs) {
 	my $pkg = shift @pkgs;
 	next unless $pkg =~ m,^perl-,;
 	my $ups = $pkg;
