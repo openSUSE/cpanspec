@@ -39,7 +39,7 @@ while ( <DETAILS> ) {
 }
 close(DETAILS);
 
-my $tocreate = 200;
+my $tocreate = 10;
 
 my @pkgs = List::Util::shuffle(keys %$xml);
 #@pkgs = sort keys %$xml;
@@ -91,9 +91,9 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 	chdir($tempdir);
 
 	# exit(0) means it exists, so skip it
-	system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
+	#system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
 
-	#system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
+	system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
 	system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
 	  or next;
 	$tocreate--;

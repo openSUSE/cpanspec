@@ -207,7 +207,7 @@ use Archive::Zip qw(:ERROR_CODES);
 use POSIX;
 use locale;
 use Text::Autoformat;
-use YAML qw(Load);
+use YAML::Any qw(Dump Load LoadFile);
 use Getopt::Long;
 use Pod::POM;
 use Pod::POM::View::Text;
@@ -246,7 +246,9 @@ our $verbose=0;
 our $follow=0;
 our $macros=1;
 our $skip_changes=0;
+our $config_file;
 our $old_file;
+our $config = {};
 our $cpan=$ENV{'CPAN'} || "http://www.cpan.org";
 
 our $home=$ENV{'HOME'} || (getpwuid($<))[7];
@@ -509,7 +511,6 @@ sub get_description($) {
     # extract pod; the file may contain no pod, that's ok
     my $pom = $parser->parse_text($cont);
 
-
     HEAD1:
     foreach my $head1 ($pom->head1) {
 
@@ -517,14 +518,17 @@ sub get_description($) {
 
         $description = '';
         foreach my $item ($head1->content()) {
+	    print Dump($item);
            last if ($item->type() eq 'head2');
            eval { $description .= $item->present('Pod::POM::View::Text'); };
         }
 
 	return $description=undef unless length($description);
-        # no limit
         my @paragraphs = (split /\n\n/, $description);
-
+	my $limit = $config->{description_paragraphs};
+	if ($limit) {
+	    @paragraphs = @paragraphs[0..($limit-1)];
+	}
         $description = join "\n\n", @paragraphs;
 
         # autoformat and return...
@@ -681,9 +685,6 @@ sub diff_changes($$) {
 	last unless $diff->Same();
     }
 
-    #use Data::Dumper;
-    #print Dumper($diff);
-
     if(  $diff->Items(2) && ! $diff->Items(1) ) {
 	my $changesdiff = '';
 	$changesdiff .= "  $_\n"  for  $diff->Items(2);
@@ -719,6 +720,7 @@ GetOptions(
         'add-buildrequires=s' => \@add_buildrequires,
         'skip-changes'      => \$skip_changes,
 	'old-file=s'        => \$old_file,
+	'config=s'          => \$config_file,
         'version'           => \&print_version,
         'prefer-macros|m'   => \$macros,
     ) or pod2usage({ -exitval => 1, -verbose => 0 });
@@ -739,6 +741,9 @@ my $prefix=$noprefix ? "" : "perl-";
 #$packager=$packager || `rpm --eval '\%packager'`;
 my $defaultdocdir = `rpm --eval '\%_defaultdocdir'`;
 chomp $defaultdocdir;
+
+$config_file ||= "cpanspec.yml" if -f "cpanspec.yml";
+$config = LoadFile($config_file) if $config_file;
 
 my @args=@ARGV;
 my @processed=();
@@ -765,7 +770,6 @@ for my $ofile (@args) {
         $version=$2;
         $type=$3;
     } else {
-        
         # keep things happy if we get "Foo-Bar" instead of "Foo::Bar"
         $ofile =~ s/-/::/g;
 
@@ -898,9 +902,10 @@ for my $ofile (@args) {
             and $_ ne "inc"
 	    and $_ ne "dist.ini.meta"
             and $_ ne "autobuild.sh"
+	    and $_ ne "debian"
 	    and $_ ne "cpanfile"
             and !/^perlcritic/
-	    and $_ ne "perltidyrc"
+	    and !/^perltidy/
             and $_ ne "pm_to_blib"
             and $_ ne "install.sh"
             } @files;
@@ -910,6 +915,7 @@ for my $ofile (@args) {
     push(@doc, "doc") if grep(/^doc\//, @files);
     push(@doc, "util") if grep(/^util\//, @files);
     push(@doc, "example") if grep(/^example\//, @files);
+    push(@doc, "samples") if grep(/^samples\//, @files);
 
     my $date=strftime("%a %b %d %Y", localtime);
 
@@ -1059,13 +1065,13 @@ for my $ofile (@args) {
     }
 
     if (!defined($license)) {
-       get_license($content);
-       if ($license && ($license =~ /under the same terms as Perl itself/ || 
-			$license =~ /under the terms of the Perl artistic license/ ||
-			$license =~ qr/free software.*dev.perl.org.* for more information/
-		      )) {
-          $license = "GPL-1.0+ or Artistic-1.0";
-       }
+	get_license($content);
+	if ($license && ($license =~ /under the same terms as Perl/ ||
+			 $license =~ /under the terms of the Perl artistic license/ ||
+			 $license =~ qr/free software.*dev.perl.org.* for more information/
+		       )) {
+	    $license = "GPL-1.0+ or Artistic-1.0";
+	}
     }
 
     if (!length($summary)) {
@@ -1076,10 +1082,16 @@ for my $ofile (@args) {
 
     $description=$summary if (!defined($description));
 
+    $summary =~ s,\.$,,;
+    $summary =~ s,^[aA] ,,;
+    if ($summary ne ucfirst($summary)) {
+	# capitalize the damn thing - for real
+	require Text::Capitalize;
+	$summary = Text::Capitalize::capitalize_title($summary);
+    }
     if (length($summary) > 79) {
 	$summary = substr($summary, 0, 72) . "[cut]";
     }
-    $summary =~ s,\.$,,;
 
     my $usebuildpl=0;
     my $usebuildplt=0;
@@ -1142,7 +1154,7 @@ for my $ofile (@args) {
 #
 # spec file for package $prefix$name (Version $version)
 #
-# Copyright (c) 2011 SUSE LINUX Products GmbH, Nuernberg, Germany.
+# Copyright (c) 2015 SUSE LINUX Products, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -1178,15 +1190,26 @@ END
     $sfile=~s/$name/\%{cpan_name}/;
 
     if ($source) {
-       if (basename($source) eq $sfile) {
-          print $spec "Source:         $source\n";
-       } else {
-         print $spec "#Source:        $source\n";
-         print $spec "Source:         $ofile\n";
-       }
+	if (basename($source) eq $sfile) {
+	    print $spec "Source:         $source\n";
+	} else {
+	    print $spec "#Source:        $source\n";
+	    print $spec "Source:         $ofile\n";
+	}
     } else {
-       print $spec "Source:         $ofile\n";
+	print $spec "Source:         $ofile\n";
     }
+    if ($config_file) {
+	print $spec "Source1:     $config_file\n";
+    }
+    if ($config->{patches}) {
+	my $counter = 0;
+	for my $p (sort keys %{$config->{patches}}) {
+	    print $spec "Patch$counter:   $p\n";
+	    $counter++;
+	}
+    }
+
     printf $spec "%-16s%s\n", "BuildArch:", "noarch" if ($noarch);
     print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
 
@@ -1275,6 +1298,12 @@ END
     }
 
     print $spec "%{perl_requires}\n";
+    if ($config->{preamble}) {
+	print $spec "#MANUAL BEGIN\n";
+	chomp $config->{preamble};
+	print $spec $config->{preamble};
+	print $spec "\n#MANUAL END\n";
+    }
 
     my $buildpath=$path;
     $buildpath=~s/$name/\%{cpan_name}/;
@@ -1291,7 +1320,16 @@ END
     if ($execs) {
 	print $spec "find . -type f -print0 | xargs -0 chmod 644\n";
     } 
-    
+
+    if ($config->{patches}) {
+	my $counter = 0;
+	for my $p (sort keys %{$config->{patches}}) {
+	    my $args = $config->{patches}->{$p} || '';
+	    print $spec "%patch$counter $args\n";
+	    $counter++;
+	}
+    }
+
     if (@filter_requires) {
         print $spec <<'END';
 
@@ -1313,6 +1351,13 @@ END
 
 rm -f pm_to_blib
 END
+    }
+
+    if ($config->{post_prep}) {
+	print $spec "#MANUAL BEGIN\n";
+	chomp $config->{post_prep};
+	print $spec $config->{post_prep};
+	print $spec "\n#MANUAL END\n";
     }
 
     print $spec <<END;
@@ -1350,10 +1395,15 @@ END
     print $spec <<END;
 \%check@{[($compat ? ' || :' : '')]}
 END
+    my $noprefix='';
+    if ($config->{no_testing}) {
+	print $spec "# MANUAL no testing ($config->{no_testing})\n";
+	$noprefix='#';
+    }
     if ($usebuildpl) {
-        print $spec "./Build test\n";
+        print $spec "$noprefix./Build test\n";
     } else {
-        print $spec "\%{__make} test\n";
+        print $spec "$noprefix\%{__make} test\n";
     }
 
 
