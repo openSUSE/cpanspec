@@ -915,6 +915,7 @@ for my $ofile (@args) {
     # special subdir
     push(@doc, "examples") if grep(/^examples\//, @files);
     push(@doc, "doc") if grep(/^doc\//, @files);
+    push(@doc, "docs") if grep(/^docs\//, @files);
     push(@doc, "util") if grep(/^util\//, @files);
     push(@doc, "example") if grep(/^example\//, @files);
     push(@doc, "samples") if grep(/^samples\//, @files);
@@ -1069,6 +1070,7 @@ for my $ofile (@args) {
     if (!defined($license)) {
 	get_license($content);
 	if ($license && ($license =~ /under the same terms as Perl/ ||
+                         $license =~ /same terms as the Perl 5/ ||
 			 $license =~ /under the terms of the Perl artistic license/ ||
 			 $license =~ qr/free software.*dev.perl.org.* for more information/
 		       )) {
