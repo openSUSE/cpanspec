@@ -19,6 +19,7 @@ use List::Util;
 
 require CPAN::Meta::Requirements;
 use File::Temp qw/tempdir/;
+use File::Copy qw/copy/;
 
 open(my $statusfh, "curl -s https://build.opensuse.org/status/project/devel:languages:perl|");
 my $xml = XMLin($statusfh)->{package};
@@ -39,7 +40,7 @@ while ( <DETAILS> ) {
 }
 close(DETAILS);
 
-my $tocreate = 30;
+my $tocreate = 3000;
 
 my @pkgs = List::Util::shuffle(keys %$xml);
 #@pkgs = sort keys %$xml;
@@ -91,9 +92,9 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 	chdir($tempdir);
 
 	# exit(0) means it exists, so skip it
-	#system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
+	system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
 
-	system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
+	#system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
 	system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
 	  or next;
 	$tocreate--;
@@ -103,6 +104,7 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 	}
 	system("wget -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$upstream{$ups}[1]");
 	#print "~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*\n";
+	copy(glob("~coolo/prod/cpanspec/cpanspec.yml"), "cpanspec.yml") unless -f "cpanspec.yml";
 	system("~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
 	  or next;
 	system("osc addremove") == 0
