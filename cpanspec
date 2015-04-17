@@ -1148,14 +1148,14 @@ for my $ofile (@args) {
 	my %scanneddeps = %{$scanner->scan_ppi_document($doc)->as_string_hash};
 	foreach my $dep (keys(%scanneddeps)) {
 	    my $ndep = $scanneddeps{$dep};
-	    unless ($build_requires{$dep} && $build_requires{$dep} > $ndep) {
+	    unless ($build_requires{$dep} && version->parse($build_requires{$dep}) > version->parse($ndep)) {
                 $possible_build_requires{$dep} = $scanneddeps{$dep};
 	    }
 	}
     }
 
     foreach my $pkg (keys %packages) { delete $build_requires{$pkg} };
-    
+
     my %hdoc = ();
     if (@doc) {
        foreach my $d (@doc) { 
