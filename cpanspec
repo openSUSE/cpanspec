@@ -388,7 +388,6 @@ sub get_file($) {
         $name=$d->dist();
         $version=$d->version();
         $version=~s/^v\.?//;
-        $source=~s/$version/\%{version}/;
     } else {
         warn "Failed to parse '$file' or find a module by that name, skipping...\n";
         next;
@@ -412,7 +411,6 @@ sub get_source($) {
     my ($m,$d);
     if ($m=$packages->package($file) and $d=$m->distribution()) {
         $source=$cpan . "/authors/id/" . $d->prefix();
-        $source=~s/$version/\%{version}/;
         $source=~s/$name/\%{cpan_name}/;
     } else {
         warn "Failed to parse '$file' or find a module by that name in $pkgdetails, skipping...\n";
@@ -551,7 +549,7 @@ sub get_summary($$) {
         next HEAD1 unless $head1->title eq 'NAME';
 
         my $pom = $head1->content;
-        $pom =~ /^[^-]+ - (.*)$/m;
+        $pom =~ /^[^-]+ -* (.*)$/m;
 
         # return...
         return $summary = $1 if $pom;
@@ -581,7 +579,7 @@ sub get_author($) {
             $line =~ s/^/     /;
             push(@lines, $line);
         }
-  
+
         $author = join "\n", @lines; 
 
         # return...
@@ -661,6 +659,17 @@ sub check_dep($) {
     my $module=shift;
 
     return (check_rpm("perl($module)") || check_repo("perl($module)"));
+}
+
+sub map_version($$) {
+    my ($module, $version) = @_;
+    if ($module eq 'Module::Build') {
+	my $nv = $version . "000000";
+	if ($nv =~ /^(.*\.[0-9]{6})/) {
+	    return $1;
+	}
+    }
+    return $version;
 }
 
 sub extract_old_changes($$) {
@@ -1004,7 +1013,7 @@ for my $ofile (@args) {
             goto SKIP;
         }
 
-        if ($meta->{abstract}) {
+        if ($meta->{abstract} && $meta->{abstract} ne 'unknown') {
           my $abstract=$meta->{abstract};
           $summary=$abstract if (!defined($summary));
         }
@@ -1045,6 +1054,8 @@ for my $ofile (@args) {
                 $license="BSD-3-Clause";
             } elsif ($meta->{license} =~ /^gpl$/i) {
                 $license="GPL-1.0+";
+            } elsif ($meta->{license} =~ /^gpl2$/i) {
+                $license="GPL-2.0+";
             } elsif ($meta->{license} =~ /^lgpl$/i) {
                 $license="LGPL-2.1+";
             } elsif ($meta->{license} =~ /^mit$/i) {
@@ -1153,10 +1164,11 @@ for my $ofile (@args) {
     }
 
     rmtree($basedir);
+    my $rpm_version = map_version($module, $version);
 
     print $spec <<END;
 #
-# spec file for package $prefix$name (Version $version)
+# spec file for package $prefix$name (Version $rpm_version)
 #
 # Copyright (c) 2015 SUSE LINUX Products, Nuernberg, Germany.
 #
@@ -1174,11 +1186,19 @@ for my $ofile (@args) {
 
 END
 
+    my $version_string = '%{version}';
+
     print $spec <<END;
 Name:           $prefix$name
-Version:        $version
+Version:        $rpm_version
 Release:        $release
 END
+
+    if ($rpm_version ne $version) {
+	print $spec "%define cpan_version $version\n";
+	$version_string = '%{cpan_version}';
+	print $spec "Provides:  perl($module) = $rpm_version\n";
+    }
 
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
     if ($config->{license}) {
@@ -1194,12 +1214,12 @@ Url:            $url
 Group:          Development/Libraries/Perl
 END
     my $sfile = basename($ofile);
-    $sfile=~s/$version/\%{version}/;
     $sfile=~s/$name/\%{cpan_name}/;
 
     my $counter = 0;
     if ($source) {
 	if (basename($source) eq $sfile) {
+	    $source =~ s,$version,$version_string,;
 	    print $spec "Source$counter:         $source\n";
 	} else {
 	    print $spec "#Source$counter:        $source\n";
@@ -1263,7 +1283,7 @@ END
         }
         if (defined $build_requires{$dep}) {
           printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
-          print $spec (" >= " . $build_requires{$dep})
+          print $spec (" >= " . map_version($dep, $build_requires{$dep}))
               if ($build_requires{$dep});
           print $spec "\n";
         } else { 
@@ -1329,7 +1349,7 @@ END
 
     my $buildpath=$path;
     $buildpath=~s/$name/\%{cpan_name}/;
-    $buildpath=~s/$version/\%{version}/;
+    $buildpath=~s/$version/$version_string/;
     print $spec <<END;
 
 \%description
@@ -1450,6 +1470,13 @@ END
 %perl_process_packlist
 END
     }
+    if ($config->{post_install}) {
+        print $spec "# MANUAL BEGIN\n";
+        chomp $config->{post_install};
+        print $spec $config->{post_install};
+        print $spec "\n# MANUAL END\n";
+    }
+
     print $spec
         "%perl_gen_filelist\n";
 
@@ -1474,12 +1501,6 @@ END
    } else {
      print $spec "\n";
    }
-   if ($config->{post_install}) {
-        print $spec "# MANUAL BEGIN\n";
-        chomp $config->{post_install};
-        print $spec $config->{post_install};
-        print $spec "\n# MANUAL END\n";
-    }
 
     print $spec "\%files -f \%{name}.files\n";
     print $spec "\%defattr(-,root,root,755)\n";

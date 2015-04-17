@@ -57,7 +57,8 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 	#print Dumper($res);
 	close($fh);
 
-	if ($res && $res->{result}->{status}) {
+	if ($res && $res->{result}->{status} && ($res->{result}->{dirty} || '') ne 'true') {
+	    print Dumper($res);
 	    for my $status (@{$res->{result}->{status}}) {
 		my $code = $status->{code} || 'unscheduled';
 		if ($code && $code eq 'finished') {
@@ -92,9 +93,9 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 	chdir($tempdir);
 
 	# exit(0) means it exists, so skip it
-	system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
+	#system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
 
-	#system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
+	system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
 	system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
 	  or next;
 	$tocreate--;
