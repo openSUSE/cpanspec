@@ -16,14 +16,21 @@ use Data::Dumper;
 use Compress::Zlib;
 use version;
 use List::Util;
+use File::Basename;
+use Storable;
 
 require CPAN::Meta::Requirements;
-use File::Temp qw/tempdir/;
+use File::Temp qw/tempdir tempfile/;
 use File::Copy qw/copy/;
 
-open(my $statusfh, "curl -s https://build.opensuse.org/status/project/devel:languages:perl|");
-my $xml = XMLin($statusfh)->{package};
-close($statusfh);
+my $scriptdir;
+
+BEGIN {
+    ($scriptdir) = $0 =~ m-(.*)/-;
+    $scriptdir ||= '.';
+    use Cwd 'abs_path';
+    $scriptdir = abs_path($scriptdir);
+}
 
 my $modpath = glob("~/.cpan/sources/modules");
 my $details = "02packages.details.txt.gz";
@@ -31,14 +38,115 @@ chdir($modpath) || die "call cpan once to create $modpath";
 system("wget -qm -nd http://www.cpan.org/modules/$details");
 
 my %upstream;
+
+my $letter = $ARGV[0];
+my %lpkgs;
+my $cache = {};
+eval { $cache = retrieve("$scriptdir/obs_cache"); };
+
+my $xml;
+
+my %autoupdate;
+
+if ($letter) {
+    open(my $statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl|");
+    $xml = XMLin($statusfh)->{entry};
+    close($statusfh);
+
+    open($statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl:CPAN-$letter?view=info|");
+    my $info = XMLin($statusfh)->{sourceinfo};
+    close($statusfh);
+    for my $pi (@$info) {
+	if (!defined $cache->{$pi->{srcmd5}}) {
+	    # TODO: cache
+	    print "CURL $pi->{package}\n";
+	    open(my $statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl:CPAN-$letter/$pi->{package}|");
+	    my $pxml = XMLin($statusfh);
+	    close($statusfh);
+	    for my $entry (keys %{$pxml->{entry}}) {
+		if ($entry =~ m/\.tar/ || $entry =~ m/\.tgz$/ || $entry =~ m/\.zip$/) {
+		    my $name = $pxml->{name};
+		    $lpkgs{$name} = $entry;
+		}
+	    }
+	    $cache->{$pi->{srcmd5}} = $lpkgs{$pi->{package}} || '';
+	    store $cache, "$scriptdir/obs_cache";
+	} else {
+	    $lpkgs{$pi->{package}} = $cache->{$pi->{srcmd5}};
+	}
+    }
+} else {
+    open(my $statusfh, "curl -s https://build.opensuse.org/status/project/devel:languages:perl|");
+    $xml = XMLin($statusfh)->{package};
+    close($statusfh);
+
+    open($statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl:autoupdate|");
+    my $info = XMLin($statusfh)->{entry};
+    close($statusfh);
+    for my $p (keys %$info) {
+	$autoupdate{$p} = 1;
+    }
+}
+
 open(DETAILS, "zcat $modpath/$details|");
 while ( <DETAILS> ) {
     chomp;
     if (m!^(\S+)\s+([\w\.]+)\s+(\S*)!m) {
-	eval { $upstream{$1} = [version->parse($2), $3]; }
+	my $pkgname = $1;
+	my $version = $2;
+	my $url = $3;
+	eval { $upstream{$pkgname} = [version->parse($version), $url]; };
+	if ($letter) {
+	    my $tar = basename($_);
+	    if ($tar && uc(substr($tar, 0, 1)) eq $letter) {
+		if (basename($tar, qw/.tar.gz .tgz .zip/) =~ m!^(\S+)-([^-]*)$!) {
+		    my $pkg = $1;
+		    while ($pkg =~ m/^(.*)-(v?[0-9][^-]*)$/) {
+			$pkg = $1;
+		    }
+		    next if defined $xml->{"perl-$pkg"};
+		    my $obs = $lpkgs{"perl-$pkg"} || '';
+		    next if $obs eq 'done';
+		    if ($obs ne $tar) {
+			my ($fh, $filename) = tempfile();
+			print $fh "<package name='perl-$pkg'><title/><description/></package>\n";
+			close($fh);
+			print "osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename\n";
+			system("osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename");
+			if ($obs) {
+			    print "osc api -X DELETE /source/devel:languages:perl:CPAN-$letter/perl-$pkg/$obs\n";
+			    system("osc api -X DELETE /source/devel:languages:perl:CPAN-$letter/perl-$pkg/$obs");
+			}
+			my $tempdir = tempdir; # ( CLEANUP => 1 );
+			chdir($tempdir);
+			system("osc co devel:languages:perl:CPAN-$letter/perl-$pkg") == 0
+			  or next;
+			print "TAR $tar '$obs' '$pkg' '$2'\n";
+			chdir("devel:languages:perl:CPAN-$letter/perl-$pkg") || die "can't chdir";
+			print "wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url\n";
+			system("wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url");
+			if (!system("~coolo/prod/cpanspec/cpanspec -f --skip-changes $tar > cpanspec.error 2>&1")) {
+			    unlink("cpanspec.error");
+			    system("osc addremove") == 0
+			      or next;
+			}
+			system("osc ci -mupdate") == 0
+			  or next;
+		    }
+		    $lpkgs{"perl-$pkg"} = 'done';
+		}
+	    }
+	}
     }
 }
 close(DETAILS);
+if ($letter) {
+    for my $pkg (keys %lpkgs) {
+	next if $lpkgs{$pkg} eq 'done';
+	#print "osc rdelete devel:languages:perl:CPAN-$letter $pkg\n";
+    }
+    exit(0);
+}
 
 my $tocreate = 3000;
 
@@ -87,7 +195,10 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 	eval { $obs_version = version->parse($xml->{$pkg}->{version}); };
 	next unless $obs_version;
 	my $older = $obs_version < $upstream{$ups}[0];
-	next unless $older;
+	if (!$older) {
+	    system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg") if $autoupdate{$pkg};
+	    next;
+	}
 	print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') .  "\n";
 	my $tempdir = tempdir; # ( CLEANUP => 1 );
 	chdir($tempdir);
@@ -95,7 +206,7 @@ while ( (@pkgs && $tocreate) || %tobuild ) {
 	# exit(0) means it exists, so skip it
 	#system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
 
-	system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg");
+	system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg") if $autoupdate{$pkg};
 	system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
 	  or next;
 	$tocreate--;
