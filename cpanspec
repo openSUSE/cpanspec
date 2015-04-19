@@ -27,7 +27,7 @@ cpanspec [options] [file [...]]
    --noprefix   -n      Don't add perl- prefix to package name
    --force      -f      Force overwriting existing spec
    --packager   -p      Name and email address of packager (for changelog)
-   --release    -r      Release of package (defaults to 1)
+   --release    -r      Release of package (defaults to 0)
    --epoch      -e      Epoch of package
    --disttag    -d      Disttag (defaults to %{?dist})
    --srpm       -s      Build a source rpm
@@ -108,7 +108,7 @@ macro in C<~/.rpmmacros>.
 
 =item B<-r>, B<--release>
 
-The release number of the package.  Defaults to 1.
+The release number of the package.  Defaults to 0.
 
 =item B<-e>, B<--epoch>
 
@@ -237,7 +237,7 @@ our $addlicense = 0;
 our $noprefix   = 0;
 our $force      = 0;
 our $packager;
-our $release = 1;
+our $release = 0;
 our $epoch;
 our $disttag      = '%{?dist}';
 our $buildsrpm    = 0;
@@ -753,6 +753,10 @@ chomp $defaultdocdir;
 $config_file ||= "cpanspec.yml" if -f "cpanspec.yml";
 $config = LoadFile($config_file) if $config_file;
 
+$config->{ignored_requires} = {};
+for my $r (split(/ /, $config->{ignore_requires} || '')) {
+  $config->{ignored_requires}->{$r} = 1;
+}
 my @args      = @ARGV;
 my @processed = ();
 
@@ -1164,7 +1168,7 @@ for my $ofile (@args) {
             $packages{$pkg->namespace} = 1;
         }
 
-	my $scan = eval { $scanner->scan_ppi_document($doc)->as_string_hash; };
+	my $scan; # = eval { $scanner->scan_ppi_document($doc)->as_string_hash; };
 	next unless $scan;
 	my %scanneddeps = %$scan; 
 	foreach my $dep (keys(%scanneddeps)) {
@@ -1191,7 +1195,7 @@ for my $ofile (@args) {
 #
 # spec file for package $prefix$name (Version $rpm_version)
 #
-# Copyright (c) 2015 SUSE LINUX Products, Nuernberg, Germany.
+# Copyright (c) 2015 SUSE LINUX GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -1308,15 +1312,13 @@ END
             }
         }
         if (defined $build_requires{$dep}) {
+            if ($config->{ignored_requires}->{$dep}) {
+	      printf $spec "#";
+            }
             printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
             print $spec (" >= " . map_version($dep, $build_requires{$dep}))
               if ($build_requires{$dep});
             print $spec "\n";
-        }
-        else {
-            #printf $spec "#%-15s%s", "BuildRequires:", "perl($dep)";
-            #print $spec (" >= " . $possible_build_requires{$dep})
-            #    if ($possible_build_requires{$dep});
         }
     }
 
@@ -1326,6 +1328,9 @@ END
 
     for my $dep (sort(keys(%requires))) {
         next if (is_in_core($dep, $requires{$dep}));
+        if ($config->{ignored_requires}->{$dep}) {
+           printf $spec "#";
+        }
         printf $spec "%-16s%s", "Requires:", "perl($dep)";
         print $spec (" >= " . $requires{$dep}) if ($requires{$dep});
         print $spec "\n";

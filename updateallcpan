@@ -173,6 +173,8 @@ if ($letter) {
     for my $pkg (keys %lpkgs) {
         next if $lpkgs{$pkg} eq 'done';
         print "osc rdelete -mgone devel:languages:perl:CPAN-$letter $pkg\n";
+        system "osc rdelete -mgone devel:languages:perl:CPAN-$letter $pkg";
+        
     }
     exit(0);
 }
