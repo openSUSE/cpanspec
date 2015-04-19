@@ -90,6 +90,8 @@ else {
     }
 }
 
+my %letter_todo;
+
 open(DETAILS, "zcat $modpath/$details|");
 while (<DETAILS>) {
     chomp;
@@ -109,59 +111,7 @@ while (<DETAILS>) {
                     next if defined $xml->{"perl-$pkg"};
                     my $obs = $lpkgs{"perl-$pkg"} || '';
                     next if $obs eq 'done';
-                    if ($obs ne $tar) {
-                        my ($fh, $filename) = tempfile();
-                        print $fh "<package name='perl-$pkg'><title/><description/><build><disable/></build></package>\n";
-                        close($fh);
-                        print "osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename\n";
-                        system("osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename");
-                        if ($obs) {
-                            print "osc api -X DELETE /source/devel:languages:perl:CPAN-$letter/perl-$pkg/$obs\n";
-                            system("osc api -X DELETE /source/devel:languages:perl:CPAN-$letter/perl-$pkg/$obs");
-                        }
-                        my $tempdir = tempdir(CLEANUP => 1);
-                        chdir($tempdir);
-                        system("osc co devel:languages:perl:CPAN-$letter/perl-$pkg") == 0
-                          or goto CHDIR;
-                        print "TAR $tar '$obs' '$pkg' '$2'\n";
-                        chdir("devel:languages:perl:CPAN-$letter/perl-$pkg") || die "can't chdir";
-                        print "wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url\n";
-                        system("wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url");
-                        print "~coolo/prod/cpanspec/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1\n";
-                        my $worked;
-			unlink("perl-$pkg.spec");
-                        if (system("~coolo/prod/cpanspec/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1") == 0 && -f "perl-$pkg.spec") {
-                            unlink("cpanspec.error");
-                            $worked = 1;
-                        }
-                        system("osc addremove") == 0
-                          or goto CHDIR;
-                        my $noarch;
-                        if (-f "perl-$pkg.spec") {
-                            open(SPEC, "perl-$pkg.spec");
-                            while (<SPEC>) {
-                                $noarch = 1 if m/^BuildArch.*noarch/;
-                            }
-                            close(SPEC);
-                        }
-                        ($fh, $filename) = tempfile();
-                        if ($worked) {
-                            if ($noarch) {
-                                print $fh "<package name='perl-$pkg'><title/><description/><build><disable arch='i586'/></build></package>\n";
-                                print "build disable i586\n";
-                            }
-                            else {
-                                print $fh "<package name='perl-$pkg'><title/><description/></package>\n";
-                                print "build enable all\n";
-                            }
-                            close($fh);
-                            print "osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename\n";
-                            system("osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename");
-                        }
-                        system("osc ci -mupdate");
-	      	      CHDIR: # finally emulation
-		        chdir("/tmp");	
-                    }
+                    $letter_todo{$pkg} = [$tar, $obs, $url] if $obs ne $tar;
                     $lpkgs{"perl-$pkg"} = 'done';
                 }
             }
@@ -169,12 +119,66 @@ while (<DETAILS>) {
     }
 }
 close(DETAILS);
+
 if ($letter) {
-    for my $pkg (keys %lpkgs) {
+    for my $pkg (sort keys %letter_todo) {
+	my ($tar, $obs, $url) = @{$letter_todo{$pkg}};
+	my ($fh, $filename) = tempfile();
+	print $fh "<package name='perl-$pkg'><title/><description/><build><disable/></build></package>\n";
+	close($fh);
+	system("osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename");
+	if ($obs) {
+	    print "osc api -X DELETE /source/devel:languages:perl:CPAN-$letter/perl-$pkg/$obs\n";
+	    system("osc api -X DELETE /source/devel:languages:perl:CPAN-$letter/perl-$pkg/$obs");
+	}
+	my $tempdir = tempdir(CLEANUP => 1);
+	chdir($tempdir);
+	system("osc co devel:languages:perl:CPAN-$letter/perl-$pkg") == 0
+	  or goto CHDIR;
+	print "TAR $tar '$obs' '$pkg'\n";
+	chdir("devel:languages:perl:CPAN-$letter/perl-$pkg") || die "can't chdir";
+	#print "wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url\n";
+	system("wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url");
+	#print "~coolo/prod/cpanspec/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1\n";
+	my $worked;
+	unlink("perl-$pkg.spec");
+	if (system("~coolo/prod/cpanspec/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1") == 0 && -f "perl-$pkg.spec") {
+	    unlink("cpanspec.error");
+	    $worked = 1;
+	}
+	system("osc addremove") == 0
+	  or goto CHDIR;
+	my $noarch;
+	if (-f "perl-$pkg.spec") {
+	    open(SPEC, "perl-$pkg.spec");
+	    while (<SPEC>) {
+		$noarch = 1 if m/^BuildArch.*noarch/;
+	    }
+	    close(SPEC);
+	}
+	($fh, $filename) = tempfile();
+	if ($worked) {
+	    if ($noarch) {
+		print $fh "<package name='perl-$pkg'><title/><description/><build><disable arch='i586'/></build></package>\n";
+		print "build disable i586\n";
+	    }
+	    else {
+		print $fh "<package name='perl-$pkg'><title/><description/></package>\n";
+		print "build enable all\n";
+	    }
+	    close($fh);
+	    #print "osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename\n";
+	    system("osc meta pkg devel:languages:perl:CPAN-$letter perl-$pkg -F $filename");
+	}
+	system("osc ci -mupdate");
+      CHDIR: # finally emulation
+	chdir("/tmp");
+    }
+
+    for my $pkg (sort keys %lpkgs) {
         next if $lpkgs{$pkg} eq 'done';
         print "osc rdelete -mgone devel:languages:perl:CPAN-$letter $pkg\n";
         system "osc rdelete -mgone devel:languages:perl:CPAN-$letter $pkg";
-        
     }
     exit(0);
 }
