@@ -139,10 +139,9 @@ if ($letter) {
 	chdir("devel:languages:perl:CPAN-$letter/perl-$pkg") || die "can't chdir";
 	#print "wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url\n";
 	system("wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url");
-	#print "~coolo/prod/cpanspec/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1\n";
 	my $worked;
 	unlink("perl-$pkg.spec");
-	if (system("~coolo/prod/cpanspec/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1") == 0 && -f "perl-$pkg.spec") {
+	if (system("$scriptdir/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1") == 0 && -f "perl-$pkg.spec") {
 	    unlink("cpanspec.error");
 	    $worked = 1;
 	}
@@ -250,9 +249,8 @@ while ((@pkgs && $tocreate) || %tobuild) {
             unlink($tar);
         }
         system("wget -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$upstream{$ups}[1]");
-        #print "~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*\n";
-        copy(glob("~coolo/prod/cpanspec/cpanspec.yml"), "cpanspec.yml") unless -f "cpanspec.yml";
-        system("~coolo/prod/cpanspec/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
+        copy("$scriptdir/cpanspec.yml", "cpanspec.yml") unless -f "cpanspec.yml";
+        system("$scriptdir/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
           or next;
         system("osc addremove") == 0
           or next;
