@@ -1597,7 +1597,7 @@ END
             }
         }
         else {
-            print 'initial package $version\n * created by $NAME $VERSION';
+            print "initial package $version\n * created by $NAME $VERSION";
         }
         system("osc vc -F $tmpfile $basename.changes");
         select($oldfh);
