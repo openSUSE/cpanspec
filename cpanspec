@@ -360,6 +360,7 @@ sub mkdir_p($) {
 
 sub update_packages() {
     return 1 if ($updated);
+    return 1;
 
     verbose("Updating $pkgdetails...");
 
@@ -400,8 +401,6 @@ sub get_source($) {
     my $file = shift;
 
     # keep things happy if we get "Foo-Bar" instead of "Foo::Bar"
-    $file =~ s/-/::/g;
-
     verbose("Get source $file");
     # Look up $file in 02packages.details.txt.
     update_packages();
@@ -411,7 +410,7 @@ sub get_source($) {
     die "Parse::CPAN::Packages->new() failed: $!\n"
       if (!defined($packages));
     my ($m, $d);
-    if ($m = $packages->package($file) and $d = $m->distribution()) {
+    if ($d = $packages->latest_distribution($file)) {
         $source = $cpan . "/authors/id/" . $d->prefix();
         $source =~ s/$name/\%{cpan_name}/;
     }
