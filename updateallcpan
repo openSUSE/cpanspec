@@ -18,6 +18,7 @@ use version;
 use List::Util;
 use File::Basename;
 use Storable;
+use Parse::CPAN::Packages;
 
 require CPAN::Meta::Requirements;
 use File::Temp qw/tempdir tempfile/;
@@ -92,33 +93,33 @@ else {
 
 my %letter_todo;
 
-open(DETAILS, "zcat $modpath/$details|");
-while (<DETAILS>) {
-    chomp;
-    if (m!^(\S+)\s+([\w\.]+)\s+(\S*)!m) {
-        my $pkgname = $1;
-        my $version = $2;
-        my $url     = $3;
-        eval { $upstream{$pkgname} = [version->parse($version), $url]; };
-        if ($letter) {
-            my $tar = basename($_);
-            if ($tar && uc(substr($tar, 0, 1)) eq $letter) {
-                if (basename($tar, qw/.tar.gz .tgz .zip/) =~ m!^(\S+)-([^-]*)$!) {
-                    my $pkg = $1;
-                    while ($pkg =~ m/^(.*)-(v?[0-9][^-]*)$/) {
-                        $pkg = $1;
-                    }
-                    next if defined $xml->{"perl-$pkg"};
-                    my $obs = $lpkgs{"perl-$pkg"} || '';
-                    next if $obs eq 'done';
-                    $letter_todo{$pkg} = [$tar, $obs, $url] if $obs ne $tar;
-                    $lpkgs{"perl-$pkg"} = 'done';
-                }
-            }
-        }
-    }
+my $p = Parse::CPAN::Packages->new("02packages.details.txt.gz");
+my %seen_distris;
+for my $m ($p->packages) {
+     $m = $m->distribution;
+     next if $seen_distris{$m->prefix};
+     $seen_distris{$m->prefix} = 1;
+     next unless $m->dist;
+     my $version = $m->version;
+     my $url     = $m->prefix;
+     eval { $upstream{$m->dist} = [version->parse($version), $url]; };
+     if ($letter) {
+         my $tar = $m->filename;
+         if ($tar && uc(substr($tar, 0, 1)) eq $letter) {
+             if (basename($tar, qw/.tar.gz .tgz .zip/) =~ m!^(\S+)-([^-]*)$!) {
+                 my $pkg = $1;
+                 while ($pkg =~ m/^(.*)-(v?[0-9][^-]*)$/) {
+                     $pkg = $1;
+                 }
+                 next if defined $xml->{"perl-$pkg"};
+                 my $obs = $lpkgs{"perl-$pkg"} || '';
+                 next if $obs eq 'done';
+                 $letter_todo{$pkg} = [$tar, $obs, $url] if $obs ne $tar;
+                 $lpkgs{"perl-$pkg"} = 'done';
+             }
+         }
+     }
 }
-close(DETAILS);
 
 if ($letter) {
     for my $pkg (sort keys %letter_todo) {
@@ -224,7 +225,9 @@ while ((@pkgs && $tocreate) || %tobuild) {
         next unless $pkg =~ m,^perl-,;
         my $ups = $pkg;
         $ups =~ s,^perl-,,;
-        $ups =~ s,-,::,g;
+        if (!defined($upstream{$ups}[0])) {
+		print "osc rdelete -mgone devel:languages:perl/$pkg\n";
+        }
         next unless defined($upstream{$ups}[0]);
         my $obs_version;
         eval { $obs_version = version->parse($xml->{$pkg}->{version}); };
