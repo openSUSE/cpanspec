@@ -226,7 +226,7 @@ while ((@pkgs && $tocreate) || %tobuild) {
         my $ups = $pkg;
         $ups =~ s,^perl-,,;
         if (!defined($upstream{$ups}[0])) {
-		print "osc rdelete -mgone devel:languages:perl/$pkg\n";
+		print "echo osc rdelete -mgone devel:languages:perl/$pkg\n";
         }
         next unless defined($upstream{$ups}[0]);
         my $obs_version;
@@ -254,9 +254,20 @@ while ((@pkgs && $tocreate) || %tobuild) {
         #system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
 
         system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg") if $autoupdate{$pkg};
-        system("osc branch -c -f devel:languages:perl $pkg devel:languages:perl:autoupdate") == 0
-          or next;
+        if (system("osc branch -f devel:languages:perl $pkg devel:languages:perl:autoupdate")) {
+	  print "branch failed\n";
+          next;
+        }
+        my $retries = 0;
+        # we need to keep trying because the service needs to finish first
+        while (system("osc co devel:languages:perl:autoupdate $pkg")) {
+          print "checkout failed: $retries\n";
+          last if ($retries++ == 3);
+          sleep(3);
+        }
+        next if ($retries > 2);
         $tocreate--;
+        print "branched\n";
         chdir("devel:languages:perl:autoupdate/$pkg") || die "can't chdir";
         for my $tar (glob("*.tar*")) {
             unlink($tar);
@@ -267,6 +278,7 @@ while ((@pkgs && $tocreate) || %tobuild) {
           or next;
         system("osc addremove") == 0
           or next;
+        print "update\n";
         system("osc ci -mupdate") == 0
           or next;
         $tobuild{$pkg} = 1;
