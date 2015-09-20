@@ -97,12 +97,19 @@ my $p = Parse::CPAN::Packages->new("02packages.details.txt.gz");
 my %seen_distris;
 for my $m ($p->packages) {
      $m = $m->distribution;
-     next if $seen_distris{$m->prefix};
-     $seen_distris{$m->prefix} = 1;
+     next if $seen_distris{$m->prefix} && $seen_distris{$m->prefix}[0] eq $m->version;
      next unless $m->dist;
-     my $version = $m->version;
+     my $version;
+     eval { $version = version->parse($m->version); };
+     $version ||= version->declare('0');
+     $seen_distris{$m->prefix} = [ $m->version, $version ];
      my $url     = $m->prefix;
-     eval { $upstream{$m->dist} = [version->parse($version), $url]; };
+     my $uversion;
+     $uversion = $upstream{$m->dist}[0] if defined $upstream{$m->dist};
+     $uversion ||= version->declare('0');
+     #printf "PKG $url $version %s - %s (%s vs %s)\n", $m->dist, $m->filename, $uversion->stringify, $version->stringify;
+     next if $version < $uversion;
+     $upstream{$m->dist} = [$version, $url];
      if ($letter) {
          my $tar = $m->filename;
          if ($tar && uc(substr($tar, 0, 1)) eq $letter) {
@@ -235,6 +242,7 @@ while ((@pkgs && $tocreate) || %tobuild) {
         my $older = $obs_version < $upstream{$ups}[0];
         if (!$older) {
             system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg") if $autoupdate{$pkg};
+            print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " NEWER\n";
             next;
         }
         print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') . "\n";
