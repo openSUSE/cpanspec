@@ -519,7 +519,6 @@ sub get_description {
             eval { $description .= $item->present('PodViewSpec'); };
         }
 
-	print "DE $description\n";
         return $description = undef unless length($description);
         my @paragraphs = (split /\n\n/, $description);
         my $limit = $config->{description_paragraphs};
