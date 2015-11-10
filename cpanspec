@@ -210,7 +210,7 @@ use Text::Autoformat;
 use YAML::Any qw(Dump Load LoadFile);
 use Getopt::Long;
 use Pod::POM;
-use Pod::POM::View::Text;
+use PodViewSpec;
 use Pod::Usage;
 use File::Basename;
 use LWP::UserAgent;
@@ -516,9 +516,10 @@ sub get_description {
         $description = '';
         foreach my $item ($head1->content()) {
             last if ($item->type() eq 'head2');
-            eval { $description .= $item->present('Pod::POM::View::Text'); };
+            eval { $description .= $item->present('PodViewSpec'); };
         }
 
+	print "DE $description\n";
         return $description = undef unless length($description);
         my @paragraphs = (split /\n\n/, $description);
         my $limit = $config->{description_paragraphs};
@@ -904,7 +905,7 @@ for my $ofile (@args) {
             and $_ ne $path
             and $_ ne "MANIFEST"
             and $_ ne "MANIFEST.SKIP"
-            and $_ ne "INSTALL"
+            and !/^INSTALL/i
             and $_ ne "SIGNATURE"
 	    and !/^META\..+$/i
 	    and !/^MYMETA\..+$/i
