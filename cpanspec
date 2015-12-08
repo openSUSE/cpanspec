@@ -1477,6 +1477,7 @@ END
 END
         }
     }
+    add_custom_spec_section($spec, "post_build");
 
     print $spec <<END;
 \%check@{[($compat ? ' || :' : '')]}
