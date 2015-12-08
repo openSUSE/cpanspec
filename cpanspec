@@ -1141,6 +1141,12 @@ for my $ofile (@args) {
     if (length($summary) > 79) {
         $summary = substr($summary, 0, 72) . "[cut]";
     }
+    if ($config->{summary}) {
+        $summary = $config->{summary};
+    }
+    if ($config->{description}) {
+        $description = $config->{description};
+    }
 
     my $usebuildpl  = 0;
     my $usebuildplt = 0;
