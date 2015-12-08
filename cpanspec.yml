@@ -1,5 +1,8 @@
 ---
 #description_paragraphs: 3
+#description: |-
+#  override description from CPAN
+#summary: override summary from CPAN
 #no_testing: broken upstream
 #sources:
 #  - source1
