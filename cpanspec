@@ -702,6 +702,16 @@ sub diff_changes($$) {
     return '';
 }
 
+sub add_custom_spec_section($$) {
+    my ($spec, $section) = @_;
+    if ($config->{$section}) {
+        print $spec "# MANUAL BEGIN\n";
+        chomp $config->{$section};
+        print $spec $config->{$section};
+        print $spec "\n# MANUAL END\n";
+    }
+}
+
 # Set locale to en_US.UTF8 so that dates in changelog will be correct
 # if using another locale. Also ensures writing out UTF8. (Thanks to
 # Roy-Magne Mo for pointing out the problem and providing a solution.)
@@ -1378,12 +1388,7 @@ END
     }
 
     print $spec "%{perl_requires}\n";
-    if ($config->{preamble}) {
-        print $spec "# MANUAL BEGIN\n";
-        chomp $config->{preamble};
-        print $spec $config->{preamble};
-        print $spec "\n# MANUAL END\n";
-    }
+    add_custom_spec_section($spec, "preamble");
 
     my $buildpath = $path;
     $buildpath =~ s/$name/\%{cpan_name}/;
@@ -1433,12 +1438,7 @@ rm -f pm_to_blib
 END
     }
 
-    if ($config->{post_prep}) {
-        print $spec "# MANUAL BEGIN\n";
-        chomp $config->{post_prep};
-        print $spec $config->{post_prep};
-        print $spec "\n# MANUAL END\n";
-    }
+    add_custom_spec_section($spec, "post_prep");
 
     print $spec <<END;
 
@@ -1477,6 +1477,7 @@ END
 END
         }
     }
+    add_custom_spec_section($spec, "post_build");
 
     print $spec <<END;
 \%check@{[($compat ? ' || :' : '')]}
@@ -1515,12 +1516,7 @@ END
 %perl_process_packlist
 END
     }
-    if ($config->{post_install}) {
-        print $spec "# MANUAL BEGIN\n";
-        chomp $config->{post_install};
-        print $spec $config->{post_install};
-        print $spec "\n# MANUAL END\n";
-    }
+    add_custom_spec_section($spec, "post_install");
 
     print $spec "%perl_gen_filelist\n";
 
