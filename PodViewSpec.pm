@@ -7,6 +7,15 @@ use Text::Wrap;
 # to reference to "the manpage"
 sub view_seq_link {
     my ($self, $link) = @_;
+    $link =~ s,^/,,;
+    if ($link =~ m/^(.*)\|(.*)/) {
+      my $ltext = $1;
+      my $lurl = $2;
+      if ($ltext eq 'here' || $lurl =~ m/^http/) {
+        return "at $lurl";
+      }
+      return $ltext;
+    }
     return $link;
 }
 
