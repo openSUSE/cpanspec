@@ -50,18 +50,18 @@ my $xml;
 my %autoupdate;
 
 if ($letter) {
-    open(my $statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl|");
+    open(my $statusfh, "-|", "osc api /status/project/devel:languages:perl");
     $xml = XMLin($statusfh)->{entry};
     close($statusfh);
 
-    open($statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl:CPAN-$letter?view=info|");
+    open($statusfh, "-|", "osc api /source/devel:languages:perl:CPAN-$letter?view=info");
     my $info = XMLin($statusfh)->{sourceinfo};
     close($statusfh);
     for my $pi (@$info) {
         if (!defined $cache->{$pi->{srcmd5}}) {
             # TODO: cache
             print "CURL $pi->{package}\n";
-            open(my $statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl:CPAN-$letter/$pi->{package}|");
+            open(my $statusfh, "-|", "osc api /source/devel:languages:perl:CPAN-$letter/$pi->{package}");
             my $pxml = XMLin($statusfh);
             close($statusfh);
             for my $entry (keys %{$pxml->{entry}}) {
@@ -79,11 +79,11 @@ if ($letter) {
     }
 }
 else {
-    open(my $statusfh, "curl -s https://build.opensuse.org/status/project/devel:languages:perl|");
+    open(my $statusfh, "-|", "osc api /status/project/devel:languages:perl");
     $xml = XMLin($statusfh)->{package};
     close($statusfh);
 
-    open($statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl:autoupdate|");
+    open($statusfh, "-|", "osc api /source/devel:languages:perl:autoupdate");
     my $info = XMLin($statusfh)->{entry};
     close($statusfh);
     for my $p (keys %$info) {
@@ -198,12 +198,12 @@ my @pkgs = List::Util::shuffle(keys %$xml);
 my %tobuild;
 while ((@pkgs && $tocreate) || %tobuild) {
     if (%tobuild) {
-        my $url     = "https://build.opensuse.org/build/devel:languages:perl:autoupdate/_result?";
+        my $url    = "/build/devel:languages:perl:autoupdate/_result?";
         my @tocheck = sort keys %tobuild;
         $url .= "package=" . shift @tocheck;
         $url .= "&package=$_" for (@tocheck);
         print "checking '$url'\n";
-        open(my $fh, "curl -s '$url'|");
+        open(my $fh, "-|", "osc api '$url'");
         my $res = XMLin($fh, forcearray => [qw/status/]);
         #print Dumper($res);
         close($fh);
@@ -247,7 +247,7 @@ while ((@pkgs && $tocreate) || %tobuild) {
         }
         print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') . "\n";
 	my $ntar = basename($upstream{$ups}[1]);
-	open(my $statusfh, "curl -s https://build.opensuse.org/source/devel:languages:perl/$pkg|");
+	open(my $statusfh, "-|", "osc api /source/devel:languages:perl/$pkg");
 	my $pxml = XMLin($statusfh);
 	close($statusfh);
 	if ($pxml->{entry}->{$ntar}) {
