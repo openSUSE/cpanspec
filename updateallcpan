@@ -26,6 +26,9 @@ use File::Copy qw/copy/;
 
 my $scriptdir;
 
+#my $mirror = 'ftp://cpan.mirror.iphh.net/pub/CPAN';
+my $mirror = 'http://cpan.noris.de';
+
 BEGIN {
     ($scriptdir) = $0 =~ m-(.*)/-;
     $scriptdir ||= '.';
@@ -146,8 +149,8 @@ if ($letter) {
 	  or goto CHDIR;
 	print "TAR $tar '$obs' '$pkg'\n";
 	chdir("devel:languages:perl:CPAN-$letter/perl-$pkg") || die "can't chdir";
-	#print "wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url\n";
-	system("wget -nc -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$url");
+	#print "wget -nc -q $mirror/authors/id/$url\n";
+	system("wget -nc -q $mirror/authors/id/$url");
 	my $worked;
 	unlink("perl-$pkg.spec");
 	if (system("$scriptdir/cpanspec -v -f --skip-changes $tar > cpanspec.error 2>&1") == 0 && -f "perl-$pkg.spec") {
@@ -280,7 +283,7 @@ while ((@pkgs && $tocreate) || %tobuild) {
         for my $tar (glob("*.tar*")) {
             unlink($tar);
         }
-        system("wget -q ftp://cpan.mirror.iphh.net/pub/CPAN/authors/id/$upstream{$ups}[1]");
+        system("wget -q $mirror/authors/id/$upstream{$ups}[1]");
         copy("$scriptdir/cpanspec.yml", "cpanspec.yml") unless -f "cpanspec.yml";
         system("$scriptdir/cpanspec -f --old-file .osc/*.tar* *.tar*") == 0
           or next;
