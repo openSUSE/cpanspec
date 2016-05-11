@@ -850,7 +850,9 @@ for my $ofile (@args) {
     my $changes;
     my $changesfile;
     foreach my $entry (@archive_files) {
-        if ($entry !~ /^(?:.\/)?($name-(?:v\.?)?$version)(?:\/|$)/) {
+        my $version0=$version;
+        $version0=~s/0*$/0*/; # pathnames may not contain as many trailing zeros
+        if ($entry !~ /^(?:.\/)?($name-(?:v\.?)?$version0)(?:\/|$)/) {
             warn "BOGUS PATH DETECTED: $entry\n";
             $bogus++;
             next;
@@ -859,7 +861,7 @@ for my $ofile (@args) {
             $path = $1;
         }
 
-        $entry =~ s,^(?:.\/)?$name-(?:v\.?)?$version/,,;
+        $entry =~ s,^(?:.\/)?$name-(?:v\.?)?$version0/,,;
         next if (!$entry);
 
         push(@files, $entry);
