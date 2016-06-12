@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 
-# Copyright (C) 2015 Stephan Kulow <coolo@suse.com>
+# Copyright (C) 2015-2016 Stephan Kulow <coolo@suse.com>
 
 # This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -99,7 +99,11 @@ my %letter_todo;
 my $p = Parse::CPAN::Packages->new("02packages.details.txt.gz");
 my %seen_distris;
 for my $m ($p->packages) {
-     $m = $m->distribution;
+    $m = $m->distribution;
+    if (!$m->version) {
+	#printf "Distribution %s has no version defined\n", $m->prefix;
+	next;
+    }
      next if $seen_distris{$m->prefix} && $seen_distris{$m->prefix}[0] eq $m->version;
      next unless $m->dist;
      my $version;
@@ -245,7 +249,7 @@ while ((@pkgs && $tocreate) || %tobuild) {
         my $older = $obs_version < $upstream{$ups}[0];
         if (!$older) {
             system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg") if $autoupdate{$pkg};
-            print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " NEWER\n";
+            #print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " NEWER\n";
             next;
         }
         print "PKG $pkg " . $obs_version . " $ups " . $upstream{$ups}[0] . " " . ($older ? 'OLDER' : 'NEWER') . "\n";
@@ -261,12 +265,8 @@ while ((@pkgs && $tocreate) || %tobuild) {
 	my $tempdir = tempdir;    # ( CLEANUP => 1 );
         chdir($tempdir);
 
-        # exit(0) means it exists, so skip it
-        #system("osc api /source/devel:languages:perl:autoupdate/$pkg > /dev/null") || next;
-
-        system("osc rdelete -mfresh -f devel:languages:perl:autoupdate $pkg") if $autoupdate{$pkg};
-        if (system("osc branch -f devel:languages:perl $pkg devel:languages:perl:autoupdate")) {
-	  print "branch failed\n";
+        if (!$autoupdate{$pkg} && system("osc branch devel:languages:perl $pkg devel:languages:perl:autoupdate") != 0) {
+	  print "branch of $pkg failed\n";
           next;
         }
         my $retries = 0;
