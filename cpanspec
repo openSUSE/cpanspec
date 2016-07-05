@@ -948,6 +948,7 @@ for my $ofile (@args) {
     push(@doc, "util") if grep(/^util\//, @files);
     push(@doc, "example") if grep(/^example\//, @files);
     push(@doc, "samples") if grep(/^samples\//, @files);
+    push(@doc, "license") if grep(/^license\//, @files);
 
     my $date=strftime("%a %b %d %Y", localtime);
 
