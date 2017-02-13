@@ -1096,6 +1096,9 @@ for my $ofile (@args) {
             elsif ($meta->{license} =~ /^mozilla$/i) {
                 $license = "MPL";
             }
+            elsif ($meta->{license} =~ /^gpl3$/i) {
+                $license = "GPL-3.0+";
+            }
             elsif ($meta->{license} =~ /^open_source$/i || $meta->{license} =~ /^unrestricted$/i) {
                 $license = "SUSE-Public-Domain";    # rpmlint will complain
             }

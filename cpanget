@@ -4,6 +4,10 @@ set -e
 
 CPAN=${CPAN:-"http://www.cpan.org"}
 packages=$HOME/.cpan/sources/modules/02packages.details.txt.gz
+npackages=$HOME/.local/share/.cpan/sources/modules/02packages.details.txt.gz
+if test -e $npackages; then
+  packages=$npackages
+fi
 
 quiet=''
 only_url=0
