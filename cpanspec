@@ -249,7 +249,7 @@ our $skip_changes = 0;
 our $config_file;
 our $old_file;
 our $config = {};
-our $cpan = $ENV{'CPAN'} || "http://www.cpan.org";
+our $cpan = $ENV{'CPAN'} || 'https://cpan.metacpan.org';
 
 our $home = $ENV{'HOME'} || (getpwuid($<))[7];
 die "Can't locate home directory.  Please define \$HOME.\n"
@@ -710,6 +710,16 @@ sub add_custom_spec_section($$) {
         print $spec $config->{$section};
         print $spec "\n# MANUAL END\n";
     }
+}
+
+sub is_license_file {
+    my $file = shift;
+
+    return 1 if $file =~ /^copying/i;
+    return 1 if $file =~ /^license/i;
+    return 1 if $file =~ /^artistic/i;
+    return 1 if $file =~ /^mit/i;
+    return;
 }
 
 # Set locale to en_US.UTF8 so that dates in changelog will be correct
@@ -1209,7 +1219,7 @@ for my $ofile (@args) {
 
     foreach my $pkg (keys %packages) { delete $build_requires{$pkg} }
 
-    my %hdoc = ();
+    my %hdoc;
     if (@doc) {
         foreach my $d (@doc) {
             $hdoc{$d} = 1;
@@ -1559,7 +1569,20 @@ END
     print $spec "\%defattr(-,root,root,755)\n";
 
     if (%hdoc) {
-        print $spec "%doc " . join(' ', sort(keys(%hdoc))) . "\n";
+	my @ldoc, @hdoc;
+	for my $f (keys %hdoc) {
+	    if (is_license_file($f)) {
+		push(@ldoc, $f);
+	    } else {
+		push(@hdoc, $f);
+	    }
+	}
+	if (@hdoc) {
+	    print $spec "%doc " . join(' ', sort(@hdoc)) . "\n";
+	}
+	if (@ldo) {
+	    print $spec "%license " . join(' ', sort(@ldoc)) . "\n";
+	}
     }
 
     if ($scripts) {
