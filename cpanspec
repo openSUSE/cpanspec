@@ -1569,7 +1569,7 @@ END
     print $spec "\%defattr(-,root,root,755)\n";
 
     if (%hdoc) {
-	my @ldoc, @hdoc;
+	my (@ldoc, @hdoc);
 	for my $f (keys %hdoc) {
 	    if (is_license_file($f)) {
 		push(@ldoc, $f);
@@ -1580,7 +1580,7 @@ END
 	if (@hdoc) {
 	    print $spec "%doc " . join(' ', sort(@hdoc)) . "\n";
 	}
-	if (@ldo) {
+	if (@ldoc) {
 	    print $spec "%license " . join(' ', sort(@ldoc)) . "\n";
 	}
     }

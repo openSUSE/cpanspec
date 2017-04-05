@@ -60,7 +60,7 @@ fi
 mkdir -p $( dirname $packages )
 
 
-(cd $(dirname $packages) && wget -q -nc $CPAN/modules/$( basename $packages ) )
+(cd $(dirname $packages) && wget -q -N -nd $CPAN/modules/$( basename $packages ) )
 
 for module in "$@" ; do
     tar=$( zgrep '^'$module' ' $packages | awk '{print $3}' )
