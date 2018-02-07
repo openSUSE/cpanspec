@@ -786,19 +786,19 @@ for my $ofile (@args) {
     ($file, $name, $source, $version) = (undef, undef, undef, undef);
     ($content, $summary, $description, $author, $license) = (undef, undef, undef, undef, undef);
 
-    if ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
+    if ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $file    = $ofile;
         $name    = $1;
         $version = $2;
         $type    = $3;
     }
-    elsif ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.tgz$/i) {
+    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.tgz$/i) {
         $file    = $ofile;
         $name    = $1;
         $version = $2;
         $type    = 'tar';
     }
-    elsif ($ofile =~ /^(?:.*\/)?(.*)-(?:v\.?)?([^-]+)\.(zip)$/i) {
+    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(zip)$/i) {
         $file    = $ofile;
         $name    = $1;
         $version = $2;
@@ -811,6 +811,7 @@ for my $ofile (@args) {
         # Look up $file in 02packages.details.txt.
         get_file($ofile);
     }
+    next unless $name;
 
     my $module = $name;
     $module =~ s/-/::/g;
