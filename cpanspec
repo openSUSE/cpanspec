@@ -135,7 +135,7 @@ rpmlint happy.
 =item B<-c>, B<--cpan>
 
 The URL to a CPAN mirror.  If not specified with this option or the
-B<CPAN> environment variable, defaults to L<http://www.cpan.org/>.
+B<CPAN> environment variable, defaults to L<https://cpan.metacpan.org/>.
 
 =item B<-v>, B<--verbose>
 
@@ -246,6 +246,8 @@ our $verbose      = 0;
 our $follow       = 0;
 our $macros       = 1;
 our $skip_changes = 0;
+our $cmdperl      = "perl"; # \%{__perl}
+our $cmdrm        = "rm"; # \%{__rm}
 our $config_file;
 our $old_file;
 our $config = {};
@@ -372,6 +374,7 @@ sub update_packages() {
 }
 
 sub get_file($) {
+    my $type;
     $file = shift;
     # Look up $file in 02packages.details.txt.
     verbose("Get file $file");
@@ -391,10 +394,12 @@ sub get_file($) {
         $name    = $d->dist();
         $version = $d->version();
         $version =~ s/^v\.?//;
+        $type = $d->prefix() =~ /\.zip/ ? "zip" : "tar";
     }
     else {
         warn "Failed to parse '$file' or find a module by that name, skipping...\n";
     }
+    return $type;
 }
 
 sub get_source($) {
@@ -783,6 +788,7 @@ my @processed = ();
 for my $ofile (@args) {
 
     my $type = undef;
+    my $download = undef;
     ($file, $name, $source, $version) = (undef, undef, undef, undef);
     ($content, $summary, $description, $author, $license) = (undef, undef, undef, undef, undef);
 
@@ -809,7 +815,8 @@ for my $ofile (@args) {
         $ofile =~ s/-/::/g;
 
         # Look up $file in 02packages.details.txt.
-        get_file($ofile);
+        $type = get_file($ofile);
+        $download = 1;
     }
     next unless $name;
 
@@ -897,7 +904,7 @@ for my $ofile (@args) {
         next;
     }
 
-    my $url="http://search.cpan.org/dist/$name/";
+    my $url="https://metacpan.org/release/\%{cpan_name}";
 
     get_source($name) if(!defined $source && -d dirname($pkgdetails));
 
@@ -1028,7 +1035,7 @@ for my $ofile (@args) {
         next;
     }
 
-    print $spec qq[\%{!?perl_$vendorlib: \%define perl_$vendorlib \%(eval "\`\%{__perl} -V:install$vendorlib\`"; echo \$install$vendorlib)}\n\n]
+    print $spec qq[\%{!?perl_$vendorlib: \%define perl_$vendorlib \%(eval "\`$cmdperl -V:install$vendorlib\`"; echo \$install$vendorlib)}\n\n]
       if ($compat);
 
     $license = undef;
@@ -1234,7 +1241,7 @@ for my $ofile (@args) {
 #
 # spec file for package $prefix$name (Version $rpm_version)
 #
-# Copyright (c) 2015 SUSE LINUX GmbH, Nuernberg, Germany.
+# Copyright (c) 2018 SUSE LINUX GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -1245,7 +1252,7 @@ for my $ofile (@args) {
 # license that conforms to the Open Source Definition (Version 1.9)
 # published by the Open Source Initiative.
 
-# Please submit bugfixes or comments via http://bugs.opensuse.org/
+# Please submit bugfixes or comments via https://bugs.opensuse.org/
 #
 
 END
@@ -1280,10 +1287,11 @@ Group:          Development/Libraries/Perl
 END
     my $sfile = basename($ofile);
     $sfile =~ s/$name/\%{cpan_name}/;
+    $source =~ s/$name/\%{cpan_name}/ if $download;
 
     my $counter = 0;
     if ($source) {
-        if (basename($source) eq $sfile) {
+        if (basename($source) eq $sfile || $download) {
             $source =~ s,$version,$version_string,;
             print $spec "Source$counter:         $source\n";
         }
@@ -1474,24 +1482,24 @@ END
     else {
         if ($usebuildplt) {
             print $spec <<END;
-\%{__perl} Build.PL --installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
+$cmdperl Build.PL --installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
 ./Build build --flags=\%{?_smp_mflags}
 
 END
         }
         elsif ($usebuildpl) {
             print $spec <<END;
-\%{__perl} Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
+$cmdperl Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
 ./Build build flags=\%{?_smp_mflags}
 
 END
         }
         else {
             print $spec <<END;
-\%{__perl} Makefile.PL INSTALLDIRS=vendor@{[$noarch ? '' : qq{ OPTIMIZE="$macro{optimize}"}]}
+$cmdperl Makefile.PL INSTALLDIRS=vendor@{[$noarch ? '' : qq{ OPTIMIZE="$macro{optimize}"}]}
 END
 
-            print $spec "\%{__perl} -pi -e 's/^\\tLD_RUN_PATH=[^\\s]+\\s*/\\t/' Makefile\n"
+            print $spec "$cmdperl -pi -e 's/^\\tLD_RUN_PATH=[^\\s]+\\s*/\\t/' Makefile\n"
               if ($compat and !$noarch);
 
             print $spec <<END;
@@ -1557,7 +1565,7 @@ END
     if (@filter_requires || @filter_provides) {
         print $spec <<END;
 \%clean
-\%{__rm} -rf $macro{buildroot}@{[
+$cmdrm -rf $macro{buildroot}@{[
     (@filter_requires ? ' %{__perl_requires}' : '') .
     (@filter_provides ? ' %{__perl_provides}' : '')]}
 END
@@ -1614,25 +1622,41 @@ END
 
     if (!$skip_changes) {
         (my $basename = $specfile) =~ s{\.spec$}{};
+        my $changelogfile = "$basename.changes";
+        my $skip = 0;
 
         my $changes_diff;
 
         my ($tfh, $tmpfile) = File::Temp::tempfile;
-        my $oldfh = select $tfh;
+        my $cltxt = "";
 
-        if (-f "$basename.changes") {
-            print "updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
+        if (-f $changelogfile) {
+            my $txt = "updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
+            $cltxt .= $txt;
             if ($old_file && $changes) {
                 my $old_changes = extract_old_changes($old_file, $changesfile);
                 $old_changes =~ s,\r\n,\n,g;
-                print diff_changes($old_changes, $changes) if $old_changes;
+                $cltxt .= diff_changes($old_changes, $changes) if $old_changes;
+            }
+            local $/;
+            undef $/;
+            if(open CHANGES,"<",$changelogfile)
+            {
+              my $log = <CHANGES>;
+              if($log =~ $txt)
+              {
+                $skip = 1;
+                print STDERR "Skip changelog entry, already exists.\n";
+              }
+              close CHANGES;
             }
         }
         else {
-            print "initial package $version\n * created by $NAME $VERSION";
+            $cltxt .= "initial package $version\n * created by $NAME $VERSION";
         }
-        system("osc vc -F $tmpfile $basename.changes");
-        select($oldfh);
+        print $tfh $cltxt;
+        system("osc vc -F $tmpfile $basename.changes") if !$skip;
+        close($tfh);
     }
 }
 

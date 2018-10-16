@@ -1,0 +1,19 @@
+Tool to create spec files for perl packages.
+
+INSTALL:
+--------
+
+Requires:
+
+* perl(Algorithm::Diff)
+* perl(Class::Accessor::Chained)
+* perl(Parse::CPAN::Packages)
+* perl(Perl::PrereqScanner)
+* perl(Text::Autoformat)
+
+EXAMPLE USE:
+------------
+
+* Call "cpan" at least once to initialize
+* call "./cpanspec -v -f WWW::Mechanize" to build
+  perl-WWW-Mechanize package
