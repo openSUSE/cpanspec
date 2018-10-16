@@ -904,7 +904,7 @@ for my $ofile (@args) {
         next;
     }
 
-    my $url="https://metacpan.org/release/%{cpan_name}";
+    my $url="https://metacpan.org/release/\%{cpan_name}";
 
     get_source($name) if(!defined $source && -d dirname($pkgdetails));
 
@@ -1287,6 +1287,7 @@ Group:          Development/Libraries/Perl
 END
     my $sfile = basename($ofile);
     $sfile =~ s/$name/\%{cpan_name}/;
+    $source =~ s/$name/\%{cpan_name}/ if $download;
 
     my $counter = 0;
     if ($source) {
