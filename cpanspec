@@ -248,6 +248,7 @@ our $macros       = 1;
 our $skip_changes = 0;
 our $cmdperl      = "perl"; # \%{__perl}
 our $cmdrm        = "rm"; # \%{__rm}
+our $cmdmake      = "make"; # \%{__make}
 our $config_file;
 our $old_file;
 our $config = {};
@@ -1503,7 +1504,7 @@ END
               if ($compat and !$noarch);
 
             print $spec <<END;
-\%{__make} \%{?_smp_mflags}
+$cmdmake \%{?_smp_mflags}
 
 END
         }
@@ -1526,7 +1527,7 @@ END
           print $spec "$noprefix./Build test\n";
       }
       else {
-          print $spec "$noprefix\%{__make} test\n";
+          print $spec "$noprefix$cmdmake test\n";
       }
     }
 
