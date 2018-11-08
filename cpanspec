@@ -858,7 +858,8 @@ for my $ofile (@args) {
         $archive = Archive::Zip->new() or die "Archive::Zip->new() failed: $!\n";
         die "Read error on $file\n" unless ($archive->read($file) == AZ_OK);
         $ext = '.zip';
-        die "we do not support ZIP atm\n";
+        $archive->extractTree('', $basedir);
+        push(@archive_files, $archive->memberNames());
     }
 
     my @files = ();
