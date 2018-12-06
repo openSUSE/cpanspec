@@ -1080,7 +1080,6 @@ for my $ofile (@args) {
             $scripts = 1;
         }
 
-print "1: $meta->{license}\n";
         if ($meta->{license}) {
             # This list of licenses is from the Module::Build::API
             # docs, cross referenced with the list of licenses in
@@ -1134,7 +1133,6 @@ print "1: $meta->{license}\n";
         }
       SKIP:
     }
-print "2: $license\n";
 
     if (!defined($license)) {
         get_license($content);
@@ -1275,7 +1273,6 @@ END
     }
 
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
-print "3: $config->{license}\n";
     if ($config->{license}) {
         if($config->{license} =~ /^Perl( License)?$/i)
         {
