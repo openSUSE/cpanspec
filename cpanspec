@@ -247,6 +247,7 @@ our $skip_changes = 0;
 our $cmdperl      = "perl"; # \%{__perl}
 our $cmdrm        = "rm"; # \%{__rm}
 our $cmdmake      = "make"; # \%{__make}
+our $perllicense  = "Artistic-1.0 or GPL-1.0-or-later";
 our $config_file;
 our $old_file;
 our $config = {};
@@ -1085,7 +1086,7 @@ for my $ofile (@args) {
             # docs, cross referenced with the list of licenses in
             # /usr/share/rpmlint/config.
             if ($meta->{license} =~ /^perl$/i) {
-                $license = "Artistic-1.0 or GPL-1.0-or-later";
+                $license = $perllicense;
             }
             elsif ($meta->{license} =~ /^apache$/i) {
                 $license = "Apache-2.0";
@@ -1143,7 +1144,7 @@ for my $ofile (@args) {
                 || $license =~ /under the terms of the Perl artistic license/
                 || $license =~ qr/free software.*dev.perl.org.* for more information/))
         {
-            $license = "GPL-1.0-or-later or Artistic-1.0";
+            $license = $perllicense;
         }
     }
 
@@ -1151,7 +1152,7 @@ for my $ofile (@args) {
         $summary = "$module Perl module";
     }
 
-    $license = "CHECK(GPL-1.0-or-later or Artistic-1.0)" if (!$license);
+    $license = "CHECK($perllicense)" if (!$license);
 
     $description = $summary if (!defined($description));
 
@@ -1276,7 +1277,7 @@ END
     if ($config->{license}) {
         if($config->{license} =~ /^Perl( License)?$/i)
         {
-          $config->{license} = "Artistic-1.0 or GPL-1.0-or-later";
+          $config->{license} = $perllicense;
         }
         if("CHECK($config->{license})" ne $license
         && $config->{license} ne $license)
