@@ -9,8 +9,6 @@
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-#
-# $Id: cpanspec,v 1.67 2009/01/16 20:35:17 stevenpritchard Exp $
 
 =head1 NAME
 
@@ -190,7 +188,7 @@ use strict;
 use warnings;
 
 our $NAME    = "cpanspec";
-our $VERSION = '1.78.08';
+our $VERSION = '1.78.09';
 
 use Cwd;
 BEGIN {
@@ -249,6 +247,7 @@ our $skip_changes = 0;
 our $cmdperl      = "perl"; # \%{__perl}
 our $cmdrm        = "rm"; # \%{__rm}
 our $cmdmake      = "make"; # \%{__make}
+our $perllicense  = "Artistic-1.0 or GPL-1.0-or-later";
 our $config_file;
 our $old_file;
 our $config = {};
@@ -258,7 +257,8 @@ our $home = $ENV{'HOME'} || (getpwuid($<))[7];
 die "Can't locate home directory.  Please define \$HOME.\n"
   if (!defined($home));
 
-our $pkgdetails = "$home/.cpan/sources/modules/02packages.details.txt.gz";
+our $pkgdetails = (-d "$home/.local/share/.cpan" ? "$home/.local/share" : "$home")
+                  . "/.cpan/sources/modules/02packages.details.txt.gz";
 our $updated    = 0;
 our $basedir    = mkdtemp("/tmp/cpanspecXXXXXX") . "/";
 
@@ -860,7 +860,8 @@ for my $ofile (@args) {
         $archive = Archive::Zip->new() or die "Archive::Zip->new() failed: $!\n";
         die "Read error on $file\n" unless ($archive->read($file) == AZ_OK);
         $ext = '.zip';
-        die "we do not support ZIP atm\n";
+        $archive->extractTree('', $basedir);
+        push(@archive_files, $archive->memberNames());
     }
 
     my @files = ();
@@ -1086,7 +1087,7 @@ for my $ofile (@args) {
             # docs, cross referenced with the list of licenses in
             # /usr/share/rpmlint/config.
             if ($meta->{license} =~ /^perl$/i) {
-                $license = "Artistic-1.0 or GPL-1.0+";
+                $license = $perllicense;
             }
             elsif ($meta->{license} =~ /^apache$/i) {
                 $license = "Apache-2.0";
@@ -1101,13 +1102,13 @@ for my $ofile (@args) {
                 $license = "BSD-3-Clause";
             }
             elsif ($meta->{license} =~ /^gpl$/i) {
-                $license = "GPL-1.0+";
+                $license = "GPL-1.0-or-later";
             }
             elsif ($meta->{license} =~ /^gpl2$/i) {
-                $license = "GPL-2.0+";
+                $license = "GPL-2.0-or-later";
             }
             elsif ($meta->{license} =~ /^lgpl$/i) {
-                $license = "LGPL-2.1+";
+                $license = "LGPL-2.1-or-later";
             }
             elsif ($meta->{license} =~ /^mit$/i) {
                 $license = "MIT";
@@ -1116,7 +1117,7 @@ for my $ofile (@args) {
                 $license = "MPL";
             }
             elsif ($meta->{license} =~ /^gpl3$/i) {
-                $license = "GPL-3.0+";
+                $license = "GPL-3.0-or-later";
             }
             elsif ($meta->{license} =~ /^open_source$/i || $meta->{license} =~ /^unrestricted$/i) {
                 $license = "SUSE-Public-Domain";    # rpmlint will complain
@@ -1144,7 +1145,7 @@ for my $ofile (@args) {
                 || $license =~ /under the terms of the Perl artistic license/
                 || $license =~ qr/free software.*dev.perl.org.* for more information/))
         {
-            $license = "GPL-1.0+ or Artistic-1.0";
+            $license = $perllicense;
         }
     }
 
@@ -1152,7 +1153,7 @@ for my $ofile (@args) {
         $summary = "$module Perl module";
     }
 
-    $license = "CHECK(GPL-1.0+ or Artistic-1.0)" if (!$license);
+    $license = "CHECK($perllicense)" if (!$license);
 
     $description = $summary if (!defined($description));
 
@@ -1160,8 +1161,9 @@ for my $ofile (@args) {
     $summary =~ s,^[aA] ,,;
     if ($summary ne ucfirst($summary)) {
         # capitalize the damn thing - for real
-        require Text::Capitalize;
-        $summary = Text::Capitalize::capitalize_title($summary);
+        $summary = ucfirst($summary);
+        #require Text::Capitalize;
+        #$summary = Text::Capitalize::capitalize_title($summary);
     }
     if (length($summary) > 79) {
         $summary = substr($summary, 0, 72) . "[cut]";
@@ -1274,7 +1276,15 @@ END
 
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
     if ($config->{license}) {
-        print $spec "#Upstream: $license\n";
+        if($config->{license} =~ /^Perl( License)?$/i)
+        {
+          $config->{license} = $perllicense;
+        }
+        if("CHECK($config->{license})" ne $license
+        && $config->{license} ne $license)
+        {
+          print $spec "#Upstream: $license\n";
+        }
         print $spec "License:   $config->{license}\n";
     }
     else {
