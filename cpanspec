@@ -257,7 +257,8 @@ our $home = $ENV{'HOME'} || (getpwuid($<))[7];
 die "Can't locate home directory.  Please define \$HOME.\n"
   if (!defined($home));
 
-our $pkgdetails = "$home/.cpan/sources/modules/02packages.details.txt.gz";
+our $pkgdetails = (-d "$home/.local/share/.cpan" ? "$home/.local/share" : "$home")
+                  . "/.cpan/sources/modules/02packages.details.txt.gz";
 our $updated    = 0;
 our $basedir    = mkdtemp("/tmp/cpanspecXXXXXX") . "/";
 
