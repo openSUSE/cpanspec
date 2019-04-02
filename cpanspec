@@ -722,7 +722,7 @@ sub is_license_file {
     my $file = shift;
 
     return 1 if $file =~ /^copying/i;
-    return 1 if $file =~ /^license/i;
+    return 1 if $file =~ /^licen[sc]e/i;
     return 1 if $file =~ /^artistic/i;
     return 1 if $file =~ /^mit/i;
     return;
