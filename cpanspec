@@ -1304,14 +1304,13 @@ END
 
     my $counter = 0;
     if ($source) {
-        if (basename($source) eq $sfile || $download) {
-            $source =~ s,$version,$version_string,;
-            print $spec "Source$counter:         $source\n";
+        if (basename($source) ne $sfile) {
+           # the current source URL is not the version we're looking for
+           # just take a guess - authors don't change daily
+           $source = dirname($source) . "/$sfile";
         }
-        else {
-            print $spec "#Source$counter:        $source\n";
-            print $spec "Source$counter:         $ofile\n";
-        }
+        $source =~ s,$version,$version_string,;
+        print $spec "Source$counter:         $source\n";
     }
     else {
         print $spec "Source$counter:         $ofile\n";
