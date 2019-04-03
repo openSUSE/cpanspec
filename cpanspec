@@ -1240,12 +1240,13 @@ for my $ofile (@args) {
 
     rmtree($basedir);
     my $rpm_version = map_version($module, $version);
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 
     print $spec <<END;
 #
 # spec file for package $prefix$name (Version $rpm_version)
 #
-# Copyright (c) 2018 SUSE LINUX GmbH, Nuernberg, Germany.
+# Copyright (c) $year SUSE LINUX GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
