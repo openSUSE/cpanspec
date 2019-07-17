@@ -1,0 +1,108 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use 5.010;
+
+use FindBin '$Bin';
+use lib "$Bin/../lib";
+use CPAN2OBS qw/ debug info prompt /;
+use XML::Simple qw/ XMLin /;
+use YAML::XS;
+
+use Getopt::Long;
+GetOptions(
+    "project=s" => \my $project,
+    "project-prefix=s" => \my $project_prefix,
+    "yaml" => \my $as_yaml,
+    "lastbuild" => \my $lastbuild,
+    "repo=s" => \my $repo,
+    "arch=s" => \my $arch,
+);
+$arch ||= 'x86_64';
+$repo ||= 'openSUSE_Tumbleweed';
+my $apiurl = "https://api.opensuse.org";
+#$project ||= "home:tinita:cpan-mirror:CPAN-";
+#$project_prefix ||= "home:tinita:cpan-mirror:CPAN-";
+#$project ||= "devel:languages:perl:CPAN-";
+
+my $cpan2obs = CPAN2OBS->new({
+    apiurl => $apiurl,
+});
+
+
+my %counts;
+
+if ($project_prefix) {
+    my @letters = ('A' .. 'Z');
+
+    if (@ARGV) {
+        @letters = map uc, @ARGV;
+    }
+
+    for my $letter (@letters) {
+        my $project = "$project_prefix$letter";
+        build_status($cpan2obs, $project, $letter, \%counts);
+    }
+}
+elsif ($project) {
+    my ($key) = @ARGV;
+    $key //= "key";
+    build_status($cpan2obs, $project, $key, \%counts);
+}
+
+if ($as_yaml) {
+    say YAML::XS::Dump \%counts;
+    exit;
+}
+
+my @states = qw/
+    total building finished scheduled blocked broken
+    succeeded failed unresolvable disabled excluded
+/;
+my @states_title = qw/
+    total building finished scheduled blocked broken
+    succeeded failed unres. disabled excluded
+/;
+
+my $fmt = join ' | ', ('%9s') x @states;
+info sprintf "%10s | $fmt", '', @states_title;
+for my $letter (sort keys %counts) {
+    my $localcounts = $counts{ $letter };
+    info sprintf "%10s | $fmt", $letter, map $_ || 0, @$localcounts{ @states };
+}
+
+sub build_status {
+    my ($self, $project, $letter, $counts) = @_;
+    my $apiurl = $self->apiurl;
+    my $args = "repository=$repo&arch=$arch";
+    if ($lastbuild) {
+        $args .= '&lastbuild=1';
+    }
+    my $cmd = sprintf "osc -A %s api '/build/%s/_result?$args'",
+        $apiurl, $project;
+    debug("CMD $cmd");
+    open my $fh, "-|", $cmd;
+    my $res = XMLin($fh, forcearray => [qw/status/]);
+    close $fh;
+
+    my %localcounts;
+    if ($res && $res->{result}) {
+        my $result = $res->{result};
+        if (ref $result ne 'ARRAY') {
+            $result = [$result];
+        }
+        for my $r (@$result) {
+            my $packages = $r->{status};
+            for my $pkg (@$packages) {
+                my $code = $pkg->{code};
+                $localcounts{ $code }++;
+                $localcounts{total}++;
+            }
+        }
+    }
+    $counts->{ $letter } = \%localcounts;
+}
+
+sub usage {
+    info "Usage: $0 --data dir letter";
+}

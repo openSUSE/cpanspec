@@ -1,0 +1,65 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use 5.010;
+
+use FindBin '$Bin';
+use lib "$Bin/../lib";
+use CPAN2OBS qw/ debug info prompt /;
+use Data::Dumper;
+use Getopt::Long;
+my $max = 50;
+GetOptions(
+    'ask' => \my $ask,
+    'ask-commit' => \my $ask_commit,
+    'max=i' => \$max,
+    'data=s' => \my $data,
+    'project=s' => \my $project,
+    'package=s@' => \my @packages,
+    'redo' => \my $redo,
+);
+usage(), exit 1 unless $data;
+$project ||= "home:tinita:cpan-mirror:CPAN-";
+#$project ||= "devel:languages:perl:CPAN-";
+
+unless (@ARGV) {
+    usage();
+    exit 1;
+}
+my ($letter) = @ARGV;
+unless ($letter =~ m/^[A-Za-z]\z/) {
+    usage();
+    exit 1;
+}
+$letter = uc $letter;
+
+my $cpan2obs = CPAN2OBS->new({
+    data => $data,
+    cpanmirror => 'http://cpan.noris.de',
+    apiurl => 'https://api.opensuse.org',
+    cpanspec => "$Bin/../cpanspec",
+    project_prefix => $project,
+});
+
+info("Updating status $letter");
+$cpan2obs->update_status($letter);
+
+$cpan2obs->update_obs($letter, {
+    ask => $ask,
+    ask_commit => $ask_commit,
+    max => $max,
+    packages => \@packages,
+    redo => $redo,
+});
+
+info("Updating status $letter");
+$cpan2obs->update_status($letter);
+exit;
+
+sub usage {
+    info <<"EOM";
+Usage:
+$0 update first-letter
+EOM
+}
+

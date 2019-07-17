@@ -1,0 +1,68 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use 5.010;
+
+use FindBin '$Bin';
+use lib "$Bin/../lib";
+use CPAN2OBS qw/ debug info prompt /;
+
+use Getopt::Long;
+GetOptions(
+    "update" => \my $update,
+    "data=s" => \my $data,
+    "project=s" => \my $project,
+);
+die "--data missing" unless $data;
+$project ||= "home:tinita:cpan-mirror:CPAN-";
+#$project ||= "devel:languages:perl:CPAN-";
+
+my $apiurl = "https://api.opensuse.org";
+
+my @letters = ('A' .. 'Z');
+
+if (@ARGV) {
+    @letters = map uc, @ARGV;
+}
+
+my $cpan2obs = CPAN2OBS->new({
+    data => $data,
+    apiurl => $apiurl,
+    project_prefix => $project,
+});
+
+my @states = qw/ total done todo new error disabled /;
+my @status_list;
+for my $letter (@letters) {
+    if ($update) {
+        $cpan2obs->update_status($letter);
+    }
+    my $states = $cpan2obs->fetch_status($letter);
+    my %counts;
+    for my $dist (sort keys %$states) {
+        my $dist_status = $states->{ $dist };
+        my $status = $dist_status->[0];
+        my $obs_ok = $dist_status->[4];
+        if ($status eq 'done' and not $obs_ok) {
+            $status = 'disabled';
+        }
+        if ($status =~ m/^error/) {
+            $status = 'error';
+        }
+        $counts{ $status }++;
+        $counts{total}++;
+        next;
+    }
+
+    push @status_list, [
+        $letter, map $counts{ $_ } || 0, @states,
+    ];
+}
+
+info sprintf "  | %10s | %10s | %10s | %10s | %15s | %10s", @states;
+for my $item (@status_list) {
+    info sprintf "%s | %10s | %10s | %10s | %10s | %15s | %10s", @$item;
+}
+
+exit;
+
