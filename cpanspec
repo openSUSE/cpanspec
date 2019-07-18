@@ -201,6 +201,7 @@ BEGIN {
 use Module::CoreList;
 use FileHandle;
 use Archive::Tar;
+use Archive::Tar::Constant qw/ &DIR /;
 use Archive::Zip qw(:ERROR_CODES);
 use POSIX;
 use locale;
@@ -853,6 +854,7 @@ for my $ofile (@args) {
         my $next = Archive::Tar->iter($f, 1, {prefix => "/tmp/tar"});
 
         while (my $f = $next->()) {
+            next if $f->type == DIR;
             push(@archive_files, $f->full_path);
             $f->extract($basedir . $f->full_path) or warn "Extraction failed " . $f->full_path;
         }
