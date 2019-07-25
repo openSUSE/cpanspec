@@ -1490,27 +1490,33 @@ END
 \%build
 END
 
+    my $makefile_env = '';
+    if (grep { $_ eq 'inc/Module/Install.pm' } @archive_files) {
+        # Since perl 5.26, . was removed from @INC, but several modules
+        # do "use inc::Module::Install" in Makefile.PL
+        $makefile_env = "PERL_USE_UNSAFE_INC=1 ";
+    }
     if ($config->{custom_build}) {
         print $spec $config->{custom_build} . "\n";
     }
     else {
         if ($usebuildplt) {
             print $spec <<END;
-$cmdperl Build.PL --installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
+$makefile_env$cmdperl Build.PL --installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
 ./Build build --flags=\%{?_smp_mflags}
 
 END
         }
         elsif ($usebuildpl) {
             print $spec <<END;
-$cmdperl Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
+$makefile_env$cmdperl Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
 ./Build build flags=\%{?_smp_mflags}
 
 END
         }
         else {
             print $spec <<END;
-$cmdperl Makefile.PL INSTALLDIRS=vendor@{[$noarch ? '' : qq{ OPTIMIZE="$macro{optimize}"}]}
+$makefile_env$cmdperl Makefile.PL INSTALLDIRS=vendor@{[$noarch ? '' : qq{ OPTIMIZE="$macro{optimize}"}]}
 END
 
             print $spec "$cmdperl -pi -e 's/^\\tLD_RUN_PATH=[^\\s]+\\s*/\\t/' Makefile\n"
