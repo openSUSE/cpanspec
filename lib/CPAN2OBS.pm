@@ -404,7 +404,7 @@ sub osc_update_dist {
     my $tar = basename $url;
 
     {
-        my $cmd = "wget -nc -q $mirror/authors/id/$url -O $tar -o /dev/null";
+        my $cmd = "wget --tries 5 --timeout 30 --connect-timeout 30 -nc -q $mirror/authors/id/$url -O $tar -o /dev/null";
         debug("CMD $cmd");
         system $cmd;
         if ($? or not -f $tar) {
@@ -415,7 +415,7 @@ sub osc_update_dist {
     my $error = 1;
     {
         my $cmd = sprintf
-            "perl $cpanspec -v -f --skip-changes %s > cpanspec.error 2>&1",
+            "timeout 180 perl $cpanspec -v -f --skip-changes %s > cpanspec.error 2>&1",
             $tar;
         if (system $cmd or not -f $spec) {
             info("Error executing cpanspec");
