@@ -140,17 +140,17 @@ sub fetch_cpan_list {
             next;
         }
         my $first = uc substr $dist, 0, 1;
+        if ($dist eq 'XML-Xerces') {
+            # versions like '2.7.0-1' are not parseable.
+            # XML-Xerces is in the module index multiple times with different
+            # versions and that leads to a different version almost every day
+            $version =~ s/-//g;
+        }
         my $v = eval { version->parse($version); };
         $v ||= version->declare('0');
-        if ($dist =~ m/^ZMQ-FFI/) {
-#            debug("$dist version=$version url=$url seen=$seen{ $dist } v=$v");
-        }
         if (not exists $seen{ $dist } or ($seen{ $dist } ) < $v) {
             $seen{ $dist } = $v;
             $upstream{ $first }->{ $dist } = [$v, $url];
-            if ($dist =~ m/^ZMQ-FFI/) {
-#                debug("===> $dist version=$version url=$url seen=$seen{ $dist } v=$v");
-            }
         }
     }
 
