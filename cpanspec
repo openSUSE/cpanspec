@@ -936,6 +936,7 @@ for my $ofile (@args) {
                 !/\//
             and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak|spec)$/i
             and !/^\./
+            and !/~$/
             and $_ ne $path
             and $_ ne "MANIFEST"
             and $_ ne "MANIFEST.SKIP"
