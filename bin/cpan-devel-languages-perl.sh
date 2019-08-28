@@ -6,3 +6,4 @@ cd $DIR
 ./bin/fetch-cpan --data ~/obs-mirror
 
 ./bin/status --data ~/obs-mirror --project devel:languages:perl:CPAN- --update
+./bin/status-perl --data ~/obs-mirror --project devel:languages:perl:autoupdate --update

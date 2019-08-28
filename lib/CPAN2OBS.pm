@@ -16,6 +16,8 @@ use File::Copy qw/ copy move /;
 use File::Path qw/ remove_tree /;
 use File::Spec;
 use Parse::CPAN::Packages;
+use File::Glob qw/ bsd_glob /;
+use FindBin '$Bin';
 
 use Moo;
 use namespace::clean;
@@ -75,6 +77,26 @@ sub fetch_status {
         chomp $line;
         my ($dist, $status, $version, $url, $obs_tar, $obs_ok) = split /\t/, $line;
         $states{ $dist } = [ $status, $version, $url, $obs_tar, $obs_ok ];
+    }
+    close $fh;
+    $self->unlockdata;
+    return \%states;
+}
+
+sub fetch_status_perl {
+    my ($self, $letter) = @_;
+    my $data = $self->data;
+    my $status_file = "$data/status/perl.tsv";
+    my %states;
+    unless (-e $status_file) {
+        return \%states;
+    }
+    $self->lockdata;
+    open my $fh, '<', $status_file or die $!;
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($dist, $status, $version, $url, $obs_version) = split /\t/, $line;
+        $states{ $dist } = [ $status, $version, $url, $obs_version ];
     }
     close $fh;
     $self->unlockdata;
@@ -384,6 +406,95 @@ sub update_obs {
     $self->unlockdata;
 }
 
+sub update_obs_perl {
+    my ($self, $args) = @_;
+    my $packages = $args->{packages};
+    $self->lockdata;
+    my $project_prefix = $self->project_prefix;
+    my $data = $self->data;
+    my $apiurl = $self->apiurl;
+
+    my $auto_projects = "$data/auto.xml";
+    my $cmd = sprintf "osc -A $apiurl api /source/%s > %s",
+        $project_prefix, $auto_projects;
+    debug("CMD $cmd");
+    system $cmd;
+    my $existing = XMLin($auto_projects)->{entry};
+
+    my $osc = "$data/osc";
+    my $dir = "$osc/perl";
+    # removing previous osc checkouts
+    remove_tree $dir, { verbose => 0, safe => 1 };
+
+    my $states = $self->fetch_status_perl();
+    my @keys = sort keys %$states;
+    if ($packages and @$packages) {
+        info("Requested (@$packages)");
+        @keys = @$packages;
+    }
+
+    my $max = $args->{max};
+    my $counter = 0;
+    for my $dist (@keys) {
+        my %args = %$args;
+        my $dist_status = $states->{ $dist };
+        unless ($dist_status) {
+            info("No status found for '$dist'");
+            next;
+        }
+        my ($status, $version, $url) = @$dist_status;
+        unless ($args{redo}) {
+            next if ($status eq 'done' or $status eq 'older');
+        }
+        if ($status =~ m/^error/) {
+            info("Skip $dist ($status)");
+            next;
+        }
+
+        my $pkg = "perl-$dist";
+        if ($existing->{ $pkg }) {
+            $args{exists} = 1;
+            my $tar = basename $url;
+
+            my $pxml = "/tmp/$pkg-autoupdate.xml";
+            my $cmd = sprintf "osc -A $apiurl api /source/%s/%s >%s",
+                $project_prefix, $pkg, $pxml;
+            system $cmd and die "Error ($cmd): $?";
+            my $info = XMLin($pxml);
+            unlink $pxml;
+            if ($info->{entry}->{ $tar }) {
+                debug("$tar already exists, skipping");
+                next;
+            }
+        }
+
+        $counter++;
+        last if $counter > $max;
+
+        info("($counter) updating $dist (@$dist_status)");
+        my $answer = 'Y';
+        if ($args{ask}) {
+            $answer = prompt("Update $dist? [y/N/q] ") || 'N';
+            last if $answer eq 'Q';
+            next if $answer eq 'N';
+            info("y/n/q") if $answer ne 'Y';
+        }
+        if ($answer eq 'Y') {
+            eval {
+                $self->osc_update_dist_perl($dist, $dist_status, \%args);
+            };
+            my $err = $@;
+            if ($err) {
+                debug("ERROR: $dist $err");
+                $states->{ $dist }->[0] = 'error';
+                info("updating states (perl)");
+                $self->write_status(perl => $states);
+            }
+        }
+    }
+    $self->unlockdata;
+}
+
 sub osc_update_dist {
     my ($self, $letter, $dist, $todo, $args) = @_;
     my $data = $self->data;
@@ -490,6 +601,108 @@ sub osc_update_dist {
     return;
 }
 
+sub osc_update_dist_perl {
+    my ($self, $dist, $todo, $args) = @_;
+    my $exists = $args->{exists};
+    my $data = $self->data;
+    my $apiurl = $self->apiurl;
+    my $mirror = $self->cpanmirror;
+    my $cpanspec = $self->cpanspec;
+    my $project_prefix = $self->project_prefix;
+    my $letter = 'perl';
+
+    my $osc = "$data/osc";
+    mkdir $osc;
+    my $dir = "$osc/$letter";
+    mkdir $dir;
+    chdir $dir;
+    debug("osc_update_dist($dist)");
+    my ($status, $version, $url, $obs_tar, $obs_status) = @$todo;
+    my $pkg = "perl-$dist";
+    my $spec = "$pkg.spec";
+    my $tar = basename $url;
+
+    if ($exists) {
+        my $cmd = sprintf "osc -A $apiurl rdelete -mrecreate -f %s %s",
+            $project_prefix, $pkg;
+        debug("CMD $cmd");
+        system $cmd and die "Error ($cmd): $?";
+    }
+
+    {
+        my $cmd = sprintf "osc -A $apiurl branch devel:languages:perl %s %s",
+            $pkg, $project_prefix;
+        debug("CMD $cmd");
+        system $cmd and die "Error ($cmd): $?";
+    }
+    {
+        my $cmd = sprintf
+            "wget --tries 5 --timeout 30 --connect-timeout 30 -nc -q %s -O $dir/$tar -o /dev/null",
+            "$mirror/authors/id/$url";
+        debug("CMD $cmd");
+        system $cmd;
+        if ($? or not -f "$dir/$tar") {
+            info("Error fetching $url, skip ('$cmd': $?)");
+            return 0;
+        }
+    }
+
+    my $checkout = "$dir/$project_prefix/$pkg";
+    if (-e $checkout) {
+        debug("REMOVE $checkout");
+        remove_tree $checkout, { verbose => 0, safe => 1 };
+    }
+    {
+        my $cmd = sprintf "osc -A %s co %s/%s",
+            $apiurl, $project_prefix, $pkg;
+        system $cmd
+            and die "Error executing '$cmd': $?";
+    }
+    chdir $checkout;
+
+    my $old_tar = '';
+    for my $tar (bsd_glob("{$dist-*.tar*,$dist-*.tgz,$dist-*.zip}")) {
+        $old_tar = $tar;
+        unlink $tar;
+    }
+    move "$dir/$tar", $checkout or die $!;
+    my $error = 1;
+    copy("$Bin/../cpanspec.yml", "$checkout/cpanspec.yml") unless -f "cpanspec.yml";
+    {
+        my $cmd = sprintf
+            "timeout 180 perl $cpanspec -f --old-file %s %s > cpanspec.error 2>&1",
+            ".osc/$old_tar", $tar;
+        debug("CMD $cmd");
+        if (system $cmd or not -f $spec) {
+            system("cat cpanspec.error");
+            info("Error executing cpanspec");
+        }
+        else {
+            system("cat cpanspec.error");
+            $error = 0;
+            unlink "cpanspec.error";
+        }
+    }
+
+    {
+        my $cmd = "osc addremove";
+        debug("CMD $cmd");
+        system $cmd and die "Error executig '$cmd': $?";
+        if ($args->{ask_commit}) {
+            my $answer = prompt("Commit? [Y/n]") || 'Y';
+            if ($answer ne 'Y') {
+                info("$pkg - no commit");
+                return;
+            }
+        }
+
+        $cmd = "osc ci -mupdate";
+        debug("CMD $cmd");
+        system $cmd and die "Error executig '$cmd': $?";
+    }
+    return;
+}
+
 sub update_status {
     my ($self, $letter) = @_;
     $self->lockdata;
@@ -542,6 +755,72 @@ sub update_status {
 
     }
     $self->write_status($letter, $states);
+
+    $self->unlockdata;
+}
+
+sub update_status_perl {
+    my ($self) = @_;
+    $self->lockdata;
+    my $apiurl = $self->apiurl;
+    my $data = $self->data;
+
+    my $perl_projects = "$data/perl.xml";
+    my $cmd = "osc -A $apiurl api /status/project/devel:languages:perl > $perl_projects";
+    debug("CMD $cmd");
+    system $cmd;
+    my $existing = XMLin($perl_projects)->{package};
+
+    my $states = $self->fetch_status_perl();
+    my $upstream = {};
+    for my $letter ('A' .. 'Z') {
+        my $up = $self->from_cpan_file($letter);
+        %$upstream = ( %$upstream, %$up );
+    }
+    for my $dist (sort keys %$upstream) {
+        my $pkg = "perl-$dist";
+        next unless defined $existing->{ $pkg };
+        my $ex = $existing->{ $pkg };
+        my $ex_version = $ex->{version};
+        my $ex_version_normal = eval { version->parse($ex_version || 0) };
+        next unless $ex_version_normal;
+        my $info = $upstream->{ $dist };
+        my $dist_status = $states->{ $dist };
+
+        my ($upstream_version, $upstream_url) = @$info;
+        my $upstream_version_normal = eval {
+            version->parse($upstream_version)
+        };
+        my $upstream_tar = basename $upstream_url;
+
+        my $status = 'new';
+        if ($dist_status) {
+            $status = $dist_status->[0];
+        }
+
+        if ($status =~ m/^error/) {
+        }
+        elsif (not $ex_version) {
+            $status = 'new';
+        }
+        elsif ($ex_version_normal == $upstream_version_normal) {
+            $status = 'done';
+        }
+        elsif ($ex_version_normal > $upstream_version_normal) {
+            $status = 'older';
+        }
+        else {
+            $status = 'todo';
+        }
+
+        $dist_status = [
+            $status, $upstream_version, $upstream_url, $ex_version_normal,
+        ];
+
+        $states->{ $dist } = $dist_status;
+
+    }
+    $self->write_status('perl', $states);
 
     $self->unlockdata;
 }
