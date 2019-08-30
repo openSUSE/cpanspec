@@ -760,6 +760,7 @@ GetOptions(
     'config=s'            => \$config_file,
     'version'             => \&print_version,
     'prefer-macros|m'     => \$macros,
+    'pkgdetails=s'        => \$pkgdetails,
 ) or pod2usage({-exitval => 1, -verbose => 0});
 
 pod2usage({-exitval => 0, -verbose => 1}) if ($help);
