@@ -219,14 +219,12 @@ use File::Path qw(rmtree);
 use Intrusive;
 use Perl::PrereqScanner;
 
-# Apparently gets pulled in by another module.
-#use Cwd;
-
 require Carp;
 
-$SIG{__DIE__} = sub {
-    #    Carp::confess("Died");
-};
+# looks like the signal handler might not be necessary (any more)
+#$SIG{__DIE__} = sub {
+#    #    Carp::confess("Died");
+#};
 
 our %opt;
 
