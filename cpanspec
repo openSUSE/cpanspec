@@ -207,6 +207,7 @@ use POSIX;
 use locale;
 use Text::Autoformat;
 use YAML::Any qw(Dump Load LoadFile);
+use YAML::XS ();
 use Getopt::Long;
 use Pod::POM;
 use PodViewSpec;
@@ -778,7 +779,7 @@ my $defaultdocdir = `rpm --eval '\%_defaultdocdir'`;
 chomp $defaultdocdir;
 
 $config_file ||= "cpanspec.yml" if -f "cpanspec.yml";
-$config = LoadFile($config_file) if $config_file;
+$config = YAML::XS::LoadFile($config_file) if $config_file;
 
 $config->{ignored_requires} = {};
 for my $r (split(/ /, $config->{ignore_requires} || '')) {
