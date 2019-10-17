@@ -1298,8 +1298,8 @@ END
     print $spec <<END;
 %define cpan_name $name
 Summary:        $summary
-Url:            $url
-Group:          Development/Libraries/Perl
+URL:            $url
+Group:          development perl
 END
     my $sfile = basename($ofile);
     $sfile =~ s/$name/\%{cpan_name}/;
