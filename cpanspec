@@ -1452,7 +1452,7 @@ $description
 END
 
     if ($execs) {
-        print $spec "find . -type f ! -name \\*.pl -print0 | xargs -0 chmod 644\n";
+        print $spec qq{find . -type f ! -path "*/t/*" ! -name "*.pl" ! -name "*.sh" -print0 | xargs -0 chmod 644\n};
     }
 
     if ($config->{patches}) {
