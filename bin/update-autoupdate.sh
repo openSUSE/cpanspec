@@ -3,7 +3,9 @@
 DIR="$( dirname ${BASH_SOURCE[0]} )/.."
 cd $DIR
 
-./bin/fetch-cpan --data ~/obs-mirror
-
-./bin/status --data ~/obs-mirror --project devel:languages:perl:CPAN- --update
 ./bin/status-perl --data ~/obs-mirror --project devel:languages:perl:autoupdate --update
+
+./bin/update-perl \
+    --data ~/obs-mirror \
+    --project devel:languages:perl:autoupdate \
+    --max 20
