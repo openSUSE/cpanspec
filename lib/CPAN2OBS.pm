@@ -320,30 +320,24 @@ sub store_obs_cache {
 sub create_package_xml {
     my ($self, $pkg, $spec) = @_;
     my $xmlfile = "tmp-package.xml";
-    my $xml;
+    my $xml = qq{<package name='$pkg'><title/><description/>};
 
     if (-f $spec) {
         my $noarch;
         open my $fh, '<', $spec;
         while (<$fh>) {
-            $noarch = 1 if m/^BuildArch.*noarch/;
+            $noarch = 1, last if m/^BuildArch.*noarch/;
         }
         close $fh;
 
         if ($noarch) {
-            $xml = <<"EOM";
-<package name='$pkg'><title/><description/><build><disable arch='i586'/></build></package>
-EOM
-        }
-        else {
-            $xml = <<"EOM";
-<package name='$pkg'><title/><description/></package>
-EOM
+            $xml .= q{<build><disable arch='i586'/></build>};
         }
     }
     else {
-        $xml = "<package name='$pkg'><title/><description/><build><disable/></build></package>\n";
+        $xml .= q{<build><disable/></build>};
     }
+    $xml .= qq{</package>\n};
     {
         open my $fh, '>', $xmlfile;
         print $fh $xml;

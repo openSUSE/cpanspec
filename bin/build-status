@@ -25,9 +25,6 @@ usage(), exit if $help;
 $arch ||= 'x86_64';
 $repo ||= 'openSUSE_Tumbleweed';
 my $apiurl = "https://api.opensuse.org";
-#$project ||= "home:tinita:cpan-mirror:CPAN-";
-#$project_prefix ||= "home:tinita:cpan-mirror:CPAN-";
-#$project ||= "devel:languages:perl:CPAN-";
 
 my $cpan2obs = CPAN2OBS->new({
     apiurl => $apiurl,
@@ -40,7 +37,7 @@ if ($project_prefix) {
     my @letters = ('A' .. 'Z');
 
     if (@ARGV) {
-        @letters = map uc, @ARGV;
+        @letters = map { uc } @ARGV;
     }
 
     for my $letter (@letters) {
@@ -72,7 +69,7 @@ my $fmt = join ' | ', ('%9s') x @states;
 info sprintf "%10s | $fmt", '', @states_title;
 for my $letter (sort keys %counts) {
     my $localcounts = $counts{ $letter };
-    info sprintf "%10s | $fmt", $letter, map $_ || 0, @$localcounts{ @states };
+    info sprintf "%10s | $fmt", $letter, map { $_ || 0 } @$localcounts{ @states };
 }
 
 sub build_status {

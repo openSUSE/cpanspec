@@ -24,7 +24,7 @@ my $apiurl = "https://api.opensuse.org";
 my @letters = ('A' .. 'Z');
 
 if (@ARGV) {
-    @letters = map uc, @ARGV;
+    @letters = map { uc } @ARGV;
 }
 
 my $cpan2obs = CPAN2OBS->new({
@@ -57,7 +57,7 @@ for my $letter (@letters) {
     }
 
     push @status_list, [
-        $letter, map $counts{ $_ } || 0, @states,
+        $letter, map { $counts{ $_ } || 0 } @states,
     ];
 }
 
