@@ -8,6 +8,13 @@
 #STAT_DIR=$HOME/munin/obs-cpan
 #BUILD_STATUS=$HOME/develop/github/cpanspec/bin/build-status
 
+case "$1" in
+    -h|--help)
+        echo "Wrapper for the various build-status scripts"
+        exit
+    ;;
+esac
+
 if [[ -z "$STAT_DIR" ]]; then
     echo "Set STAT_DIR=~/path/to/stats" >&2
     exit 1

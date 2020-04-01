@@ -1,5 +1,12 @@
 #!/bin/bash
 
+case "$1" in
+    -h|--help)
+        echo "Wrapper for bin/status && bin/update"
+        exit
+    ;;
+esac
+
 DIR="$( dirname ${BASH_SOURCE[0]} )/.."
 cd $DIR
 

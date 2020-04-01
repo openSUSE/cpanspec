@@ -12,7 +12,9 @@ GetOptions(
     "update" => \my $update,
     "data=s" => \my $data,
     "project=s" => \my $project,
+    "help|h" => \my $help,
 );
+usage(), exit if $help;
 die "--data missing" unless $data;
 $project ||= "home:tinita:cpan-mirror:CPAN-";
 #$project ||= "devel:languages:perl:CPAN-";
@@ -66,3 +68,16 @@ for my $item (@status_list) {
 
 exit;
 
+sub usage {
+    print <<"EOM";
+Usage:
+
+    $0 --data ~/obs-mirror --project devel:languages:perl:CPAN- A B
+    $0 --data ~/obs-mirror --project devel:languages:perl:CPAN-
+    $0 --data ~/obs-mirror --project devel:languages:perl:CPAN- --update
+
+Report status of modules to update.
+With --update it will look into the latest data fetched with fetch-cpan` and
+update the status.
+EOM
+}

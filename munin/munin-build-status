@@ -14,6 +14,11 @@
 #   done
 #
 # Then restart munin-node.
+#
+# You can manually call a script like this to see what data munin will get:
+#   /etc/munin/plugins/devel-build-status-A
+#   /etc/munin/plugins/devel-build-status-perl
+#   /etc/munin/plugins/devel-build-status-autoupdate
 
 
 use strict;
@@ -24,6 +29,11 @@ use YAML::XS qw/ LoadFile /;
 
 my $script = $0;
 my $path = $ENV{datadir};
+
+if (@ARGV and $ARGV[0] =~ m/^(-h|--help)$/) {
+    say "Script to be called by munin, see munin documentation";
+    exit;
+}
 
 my @states = qw/
     building finished scheduled blocked broken

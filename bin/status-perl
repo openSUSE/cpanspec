@@ -12,7 +12,9 @@ GetOptions(
     "update" => \my $update,
     "data=s" => \my $data,
     "project=s" => \my $project,
+    "help|h" => \my $help,
 );
+usage(), exit if $help;
 die "--data missing" unless $data;
 $project ||= "home:tinita:CPAN:autoupdate";
 #$project ||= "devel:languages:perl:autoupdate";
@@ -45,7 +47,7 @@ for my $dist (sort keys %$states) {
 }
 
 push @status_list, [
-    "perl", map $counts{ $_ } || 0, @states,
+    "perl", map { $counts{ $_ } || 0 } @states,
 ];
 
 info sprintf "     | %10s | %10s | %10s | %10s | %10s | %10s", @states;
@@ -54,4 +56,17 @@ for my $item (@status_list) {
 }
 
 exit;
+
+sub usage {
+    print <<"EOM";
+Usage:
+
+    $0 --data ~/obs-mirror --project devel:languages:perl:autoupdate
+    $0 --data ~/obs-mirror --project devel:languages:perl:autoupdate --update
+
+Report status of modules to update.
+With --update it will look into the latest data fetched with fetch-cpan` and
+update the status.
+EOM
+}
 

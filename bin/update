@@ -17,9 +17,11 @@ GetOptions(
     'project=s' => \my $project,
     'package=s@' => \my @packages,
     'redo' => \my $redo,
+    'help|h' => \my $help,
 );
-usage(), exit 1 unless $data;
-$project ||= "home:tinita:cpan-mirror:CPAN-";
+usage(), exit if $help;
+usage(), exit 1 if (not $project or not $data);
+#$project ||= "home:tinita:cpan-mirror:CPAN-";
 #$project ||= "devel:languages:perl:CPAN-";
 
 unless (@ARGV) {
@@ -57,9 +59,20 @@ $cpan2obs->update_status($letter);
 exit;
 
 sub usage {
-    info <<"EOM";
+    print <<"EOM";
 Usage:
-$0 update first-letter
+    $0 update [options] first-letter
+
+    $0 --data ~/obs-mirror --project devel:languages:perl:CPAN- --max 20 A
+    # Only update one package
+    $0 --data ... --project ... --ask --ask-commit --package YAML-LibYAML
+    # Force if status is already done
+    $0 --data ... --project ... --ask --ask-commit --package YAML-LibYAML --redo
+
+--max           Only to \$max updates, even if there are more packages to update
+--ask           Ask before trying to update
+--ask-commit    Ask before committing
+
 EOM
 }
 

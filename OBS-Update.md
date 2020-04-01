@@ -24,7 +24,7 @@ repository. It will branch projects from
 and build the newest version from CPAN.
 
 Requests for submitting the new versions into `devel:languages:perl` have to be
-created manually.
+created manually. See below.
 
 `update-dlp-cpan.sh` will update the `CPAN-A`, B, C repositories.
 
@@ -77,3 +77,34 @@ version via the OBS API is not reliable. The format is Perl Storable.
 If you are moving this project to a different server or directory, you should
 keep the cache directory, becase refilling the cache can take days and will
 do a lot of API requests.
+
+## Creating submit requests
+
+Go to https://build.opensuse.org/project/show/devel:languages:perl:autoupdate
+and click on the package you want to submit to devel:languages:perl.
+
+Click on "link diff" to see the changes. This link might not be available
+in every case (I don't know why). In that case click on the revisions to see
+the changes.
+
+If the build is passing and the diff looks ok, click on "Submit package".
+The changes will automatically be filled in.
+Check "Remove local package if request is accepted" and click on "Create".
+
+
+## Example for updating just one module
+
+    # Get newest modules from CPAN
+    # It might take a while until a module is mirrored
+    ./bin/fetch-cpan --data ~/obs-mirror
+
+    # Update status which perl modules need to be updated
+    ./bin/status-perl --data ~/obs-mirror --project devel:languages:perl:autoupdate --update
+
+    # Update
+    ./bin/update-perl --data ~/obs-mirror --project devel:languages:perl:autoupdate --package Mojolicious
+
+Now go to
+https://build.opensuse.org/package/show/devel:languages:perl:autoupdate/perl-Mojolicious
+and create a Submit Request.
+

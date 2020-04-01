@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+# Shows the OBS build status statistics for a certain project.
 use strict;
 use warnings;
 use 5.010;
@@ -17,7 +18,10 @@ GetOptions(
     "lastbuild" => \my $lastbuild,
     "repo=s" => \my $repo,
     "arch=s" => \my $arch,
+    "help|h" => \my $help,
 );
+usage(), exit if $help;
+
 $arch ||= 'x86_64';
 $repo ||= 'openSUSE_Tumbleweed';
 my $apiurl = "https://api.opensuse.org";
@@ -104,5 +108,12 @@ sub build_status {
 }
 
 sub usage {
-    info "Usage: $0 --data dir letter";
+    info <<"EOM";
+Usage:
+
+    $0 --project devel:languages:perl:autoupdate --yaml autoupdate --repo standard
+    $0 --project devel:languages:perl --yaml perl
+    $0 --project devel:languages:perl perl --repo SLE_15
+    $0 --project devel:languages:perl --yaml perl --repo openSUSE_Tumbleweed --arch ppc
+EOM
 }

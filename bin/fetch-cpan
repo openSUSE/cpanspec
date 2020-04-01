@@ -1,4 +1,6 @@
 #!/usr/bin/env perl
+# Will fetch module list from CPAN and update status files under
+# $data/cpan/$letter.tsv
 use strict;
 use warnings;
 use 5.010;
@@ -11,7 +13,9 @@ use CPAN2OBS qw/ debug info prompt /;
 
 GetOptions(
     "data=s" => \my $data,
+    "help|h" => \my $help,
 );
+usage(), exit if $help;
 die "--data missing" unless $data;
 my $details_url = "http://www.cpan.org/modules/02packages.details.txt.gz";
 
@@ -30,3 +34,12 @@ my $cpan2obs = CPAN2OBS->new({
 
 my $upstream = $cpan2obs->fetch_cpan_list();
 
+sub usage {
+    print <<"EOM";
+Usage:
+
+    $0 --data <data-dir>
+
+    $0 --data ~/obs-mirror
+EOM
+}

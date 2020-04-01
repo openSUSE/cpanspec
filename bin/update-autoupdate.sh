@@ -1,5 +1,12 @@
 #!/bin/bash
 
+case "$1" in
+    -h|--help)
+        echo "Wrapper for bin/status-perl && bin/update-perl"
+        exit
+    ;;
+esac
+
 DIR="$( dirname ${BASH_SOURCE[0]} )/.."
 cd $DIR
 
