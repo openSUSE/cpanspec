@@ -32,7 +32,7 @@ my $cpan2obs = CPAN2OBS->new({
     cpandetails => $details_url,
 });
 
-my $upstream = $cpan2obs->fetch_cpan_list();
+$cpan2obs->fetch_cpan_list();
 
 sub usage {
     print <<"EOM";

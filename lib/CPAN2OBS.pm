@@ -18,6 +18,7 @@ use File::Spec;
 use Parse::CPAN::Packages;
 use File::Glob qw/ bsd_glob /;
 use FindBin '$Bin';
+use autodie qw/ mkdir chdir open close unlink /;
 
 use Moo;
 use namespace::clean;
@@ -41,7 +42,7 @@ sub _coerce_data {
 
 sub _coerce_project_prefix {
     my ($prefix) = @_;
-    unless ($prefix =~ m/^[A-Za-z][A-Za-z:-]+\z/) {
+    unless ($prefix =~ m/\A[A-Za-z][A-Za-z:-]+\z/) {
         die "Invalid project prefix '$prefix'";
     }
     return $prefix;
@@ -72,7 +73,7 @@ sub fetch_status {
         return \%states;
     }
     $self->lockdata;
-    open my $fh, '<', $status_file or die $!;
+    open my $fh, '<', $status_file;
     while (my $line = <$fh>) {
         chomp $line;
         my ($dist, $status, $version, $url, $obs_tar, $obs_ok) = split /\t/, $line;
@@ -92,7 +93,7 @@ sub fetch_status_perl {
         return \%states;
     }
     $self->lockdata;
-    open my $fh, '<', $status_file or die $!;
+    open my $fh, '<', $status_file;
     while (my $line = <$fh>) {
         chomp $line;
         my ($dist, $status, $version, $url, $obs_version) = split /\t/, $line;
@@ -106,9 +107,9 @@ sub fetch_status_perl {
 sub write_status {
     my ($self, $letter, $states) = @_;
     my $data = $self->data;
-    mkdir "$data/status";
+    mkdir "$data/status" unless -d "$data/status";
     my $status_file = "$data/status/$letter.tsv";
-    open my $fh, '>', $status_file or die $!;
+    open my $fh, '>', $status_file;
     for my $dist (sort keys %$states) {
         my $status = $states->{ $dist };
         say $fh join "\t", $dist, @$status;
@@ -139,7 +140,7 @@ sub fetch_cpan_list {
     if ($stats_mtime >= $details_mtime) {
         info("$cpan_stats uptodate");
         $self->unlockdata;
-        return;
+        return 1;
     }
     info("Parsing $details");
     my $p = Parse::CPAN::Packages->new($details);
@@ -195,10 +196,10 @@ sub hash_to_cpan_file {
     my ($self, $letter, $upstream) = @_;
     my $data = $self->data;
     my $cpan_modules_dir = "$data/cpan";
-    mkdir $cpan_modules_dir;
+    mkdir $cpan_modules_dir unless -d $cpan_modules_dir;
     my $cpan_modules_file = "$cpan_modules_dir/$letter.tsv";
 
-    open my $fh, '>', $cpan_modules_file or die $!;
+    open my $fh, '>', $cpan_modules_file;
     for my $dist (sort keys %$upstream) {
         my $info = $upstream->{ $dist };
         my ($version, $url) = @$info;
@@ -211,10 +212,10 @@ sub from_cpan_file {
     my ($self, $letter) = @_;
     my $data = $self->data;
     my $cpan_modules_dir = "$data/cpan";
-    mkdir $cpan_modules_dir;
+    mkdir $cpan_modules_dir unless -d $cpan_modules_dir;
     my $cpan_modules_file = "$cpan_modules_dir/$letter.tsv";
 
-    open my $fh, '<', $cpan_modules_file or die $!;
+    open my $fh, '<', $cpan_modules_file;
     my %upstream;
     while (my $line = <$fh>) {
         chomp $line;
@@ -235,7 +236,7 @@ sub fetch_obs_info {
 
     my $obsdir = "$data/obs";
     my $letter_xml = "$obsdir/CPAN-$letter.xml";
-    mkdir $obsdir;
+    mkdir $obsdir unless -d $obsdir;
     my %obs_info;
 
     my $old =(not -e $letter_xml or ((stat $letter_xml)[9] + 60 * 60) < time);
@@ -251,7 +252,7 @@ sub fetch_obs_info {
     return \%obs_info unless $info;
     $info = [$info] unless ref $info eq 'ARRAY';
 
-    mkdir "$data/project-xml";
+    mkdir "$data/project-xml" unless -d "$data/project-xml";
     for my $pi (@$info) {
         my $srcmd5 = $pi->{srcmd5};
         my $package = $pi->{package};
@@ -296,17 +297,22 @@ sub fetch_obs_info {
 sub fetch_obs_cache {
     my ($self, $letter) = @_;
     my $data = $self->data;
-    mkdir "$data/obs-cache";
+    mkdir "$data/obs-cache" unless -d "$data/obs-cache";
     my $cachefile = "$data/obs-cache/$letter";
     my $cache = {};
-    eval { $cache = retrieve($cachefile); };
+    if (-f $cachefile) {
+        eval { $cache = retrieve($cachefile); };
+        if ($@) {
+            warn "Problem loading $cachefile: $@";
+        }
+    }
     return $cache;
 }
 
 sub store_obs_cache {
     my ($self, $letter, $cache) = @_;
     my $data = $self->data;
-    mkdir "$data/obs-cache";
+    mkdir "$data/obs-cache" unless -d "$data/obs-cache";
     my $cachefile = "$data/obs-cache/$letter";
     store $cache, $cachefile;
 }
@@ -318,7 +324,7 @@ sub create_package_xml {
 
     if (-f $spec) {
         my $noarch;
-        open my $fh, '<', $spec or die $!;
+        open my $fh, '<', $spec;
         while (<$fh>) {
             $noarch = 1 if m/^BuildArch.*noarch/;
         }
@@ -339,7 +345,7 @@ EOM
         $xml = "<package name='$pkg'><title/><description/><build><disable/></build></package>\n";
     }
     {
-        open my $fh, '>', $xmlfile or die $!;
+        open my $fh, '>', $xmlfile;
         print $fh $xml;
         close $fh;
     }
@@ -394,8 +400,7 @@ sub update_obs {
             eval {
                 $self->osc_update_dist($letter, $dist, $dist_status, $args);
             };
-            my $err = $@;
-            if ($err) {
+            if (my $err = $@) {
                 debug("ERROR: $dist $err");
                 $states->{ $dist }->[0] = 'error';
                 info("updating states ($letter)");
@@ -504,9 +509,9 @@ sub osc_update_dist {
     my $project_prefix = $self->project_prefix . $letter;
 
     my $osc = "$data/osc";
-    mkdir $osc;
+    mkdir $osc unless -d $osc;
     my $dir = "$osc/$letter";
-    mkdir $dir;
+    mkdir $dir unless -d $dir;
     chdir $dir;
     debug("osc_update_dist($dist)");
     my ($status, $version, $url, $obs_tar, $obs_status) = @$todo;
@@ -589,7 +594,7 @@ sub osc_update_dist {
             my $answer = prompt("Commit? [Y/n]") || 'Y';
             if ($answer ne 'Y') {
                 info("$pkg - no commit");
-                return;
+                return 1;
             }
         }
 
@@ -598,7 +603,6 @@ sub osc_update_dist {
         system $cmd and die "Error executig '$cmd': $?";
     }
     unlink "$dir/$xmlfile";
-    return;
 }
 
 sub osc_update_dist_perl {
@@ -612,9 +616,9 @@ sub osc_update_dist_perl {
     my $letter = 'perl';
 
     my $osc = "$data/osc";
-    mkdir $osc;
+    mkdir $osc unless -d $osc;
     my $dir = "$osc/$letter";
-    mkdir $dir;
+    mkdir $dir unless -d $dir;
     chdir $dir;
     debug("osc_update_dist($dist)");
     my ($status, $version, $url, $obs_tar, $obs_status) = @$todo;
@@ -692,7 +696,7 @@ sub osc_update_dist_perl {
             my $answer = prompt("Commit? [Y/n]") || 'Y';
             if ($answer ne 'Y') {
                 info("$pkg - no commit");
-                return;
+                return 1;
             }
         }
 
@@ -700,7 +704,6 @@ sub osc_update_dist_perl {
         debug("CMD $cmd");
         system $cmd and die "Error executig '$cmd': $?";
     }
-    return;
 }
 
 sub update_status {
@@ -828,7 +831,7 @@ sub update_status_perl {
 sub lockdata {
     my ($self) = @_;
     my $data = $self->data;
-    mkdir $data;
+    mkdir $data unless -d $data;
     return 1 if $self->locked;
 
     my $lockfile = "$data/lockfile";
