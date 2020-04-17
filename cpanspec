@@ -207,6 +207,7 @@ use POSIX;
 use locale;
 use Text::Autoformat;
 use YAML::Any qw(Dump Load LoadFile);
+use YAML::XS ();
 use Getopt::Long;
 use Pod::POM;
 use PodViewSpec;
@@ -219,14 +220,7 @@ use File::Path qw(rmtree);
 use Intrusive;
 use Perl::PrereqScanner;
 
-# Apparently gets pulled in by another module.
-#use Cwd;
-
 require Carp;
-
-$SIG{__DIE__} = sub {
-    #    Carp::confess("Died");
-};
 
 our %opt;
 
@@ -760,6 +754,7 @@ GetOptions(
     'config=s'            => \$config_file,
     'version'             => \&print_version,
     'prefer-macros|m'     => \$macros,
+    'pkgdetails=s'        => \$pkgdetails,
 ) or pod2usage({-exitval => 1, -verbose => 0});
 
 pod2usage({-exitval => 0, -verbose => 1}) if ($help);
@@ -779,7 +774,7 @@ my $defaultdocdir = `rpm --eval '\%_defaultdocdir'`;
 chomp $defaultdocdir;
 
 $config_file ||= "cpanspec.yml" if -f "cpanspec.yml";
-$config = LoadFile($config_file) if $config_file;
+$config = YAML::XS::LoadFile($config_file) if $config_file;
 
 $config->{ignored_requires} = {};
 for my $r (split(/ /, $config->{ignore_requires} || '')) {
@@ -875,16 +870,19 @@ for my $ofile (@args) {
     foreach my $entry (@archive_files) {
         my $version0=$version;
         $version0=~s/0*$/0*/; # pathnames may not contain as many trailing zeros
-        if ($entry !~ /^(?:.\/)?($name-(?:v\.?)?$version0)(?:\/|$)/) {
+        if (
+            $entry !~ m{^(?:./)?($name-(?:v\.?)?$version0)(?:/|$)}
+            and $entry !~ m{^(?:./)?($name)(?:\/|$)}
+            ) {
             warn "BOGUS PATH DETECTED: $entry\n";
             $bogus++;
             next;
         }
-        elsif (!defined($path)) {
-            $path = $1;
-        }
+        $path //= $1;
 
-        $entry =~ s,^(?:.\/)?$name-(?:v\.?)?$version0/,,;
+        unless ($entry =~ s{^(?:./)?$name-(?:v\.?)?$version0/}{}) {
+            $entry =~ s{^(?:./)?$name/}{};
+        }
         next if (!$entry);
 
         push(@files, $entry);
@@ -1449,7 +1447,7 @@ $description
 END
 
     if ($execs) {
-        print $spec "find . -type f ! -name \\*.pl -print0 | xargs -0 chmod 644\n";
+        print $spec qq{find . -type f ! -path "*/t/*" ! -name "*.pl" ! -path "*/bin/*" ! -path "*/script/*" ! -name "configure" -print0 | xargs -0 chmod 644\n};
     }
 
     if ($config->{patches}) {

@@ -1,0 +1,119 @@
+#!/usr/bin/env perl
+
+# Munin configuration
+# put the following into /etc/munin/plugin-conf.d/munin-node
+#
+#   [devel-build-status-*]
+#   env.datadir /home/user/munin/obs-cpan
+#
+# Create plugin scripts:
+#   cd /etc/munin/plugins
+#   for i in A B C D E F G H I J K L M N O P Q R S T U V W X Y Z autoupdate perl total;
+#   do
+#     ln -s /path/to/cpanspec/munin/munin-build-status devel-build-status-$i
+#   done
+#
+# Then restart munin-node.
+#
+# You can manually call a script like this to see what data munin will get:
+#   /etc/munin/plugins/devel-build-status-A
+#   /etc/munin/plugins/devel-build-status-perl
+#   /etc/munin/plugins/devel-build-status-autoupdate
+
+
+use strict;
+use warnings;
+use 5.010;
+use Data::Dumper;
+use YAML::XS qw/ LoadFile /;
+
+my $script = $0;
+my $path = $ENV{datadir};
+
+if (@ARGV and $ARGV[0] =~ m/^(-h|--help)$/) {
+    say "Script to be called by munin, see munin documentation";
+    exit;
+}
+
+my @states = qw/
+    building finished scheduled blocked broken
+    succeeded failed unresolvable disabled excluded
+/;
+
+my $letter;
+if ($script =~ m/-([A-Z])\z/) {
+    $letter = $1;
+}
+elsif ($script =~ m/-total\z/) {
+    $letter = 'total';
+}
+elsif ($script =~ m/-perl\z/) {
+    $letter = 'perl';
+}
+elsif ($script =~ m/-autoupdate\z/) {
+    $letter = 'autoupdate';
+}
+else {
+    die "script '$0' not supported";
+}
+
+if ( defined $ARGV[0] and $ARGV[0] eq "config" ) {
+    config();
+    exit;
+}
+
+my $data = {};
+
+if ($letter eq 'total') {
+    for my $letter ('A' .. 'Z') {
+        my $file = "$path/build-status-$letter.yaml";
+        my $letter_data = LoadFile($file);
+        $letter_data = $letter_data->{ $letter };
+        for my $state (@states) {
+            $data->{ $state } += $letter_data->{ $state } || 0;
+        }
+    }
+}
+else {
+    my $file = "$path/build-status-$letter.yaml";
+    $data = LoadFile($file);
+    $data = $data->{ $letter };
+}
+
+
+{
+    my $total = 0;
+    for my $state (@states) {
+        my $value = $data->{ $state } || 0;
+        $total += $value;
+        print <<"EOM";
+$state.value $value
+EOM
+    }
+    print <<"EOM";
+total.value $total
+EOM
+}
+
+
+#graph_total total
+sub config {
+    print <<"EOM";
+graph_title CPAN Mirror Build Status $letter
+graph_args --base 1000 -l 0
+graph_category obs-cpan
+graph_order succeeded unresolvable failed building finished scheduled blocked broken disabled excluded
+graph_vlabel packages
+EOM
+for my $state (@states) {
+    print <<"EOM";
+$state.label $state
+$state.draw LINE
+EOM
+}
+print <<"EOM";
+total.label Total
+total.graph no
+EOM
+
+}
