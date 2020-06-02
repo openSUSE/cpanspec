@@ -1650,7 +1650,7 @@ END
         my $cltxt = "";
 
         if (-f $changelogfile) {
-            my $txt = "updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
+            my $txt = "- updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
             $cltxt .= $txt;
             if ($old_file && $changes) {
                 my $old_changes = extract_old_changes($old_file, $changesfile);
@@ -1671,7 +1671,7 @@ END
             }
         }
         else {
-            $cltxt .= "initial package $version\n * created by $NAME $VERSION";
+            $cltxt .= "- initial package $version\n * created by $NAME $VERSION";
         }
         print $tfh $cltxt;
         system("osc vc -F $tmpfile $basename.changes") if !$skip;
