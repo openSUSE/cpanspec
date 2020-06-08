@@ -41,6 +41,7 @@ cpanspec [options] [file [...]]
    --add-requires       Add Requires for this item
    --add-provides       Add Provides for this item
    --add-buildrequires  Add BuildRequires for this item
+   --old-file=s         Old archive file for extraction of changelog difference
    --skip-changes       Do not create or update .changes file
    --version            Print the version number and exit
 
@@ -696,9 +697,16 @@ sub diff_changes($$) {
     return '' unless $diff->Next(0);
 
     if(  $diff->Items(2) && ! $diff->Items(1) ) {
-	my $changesdiff = '';
-	$changesdiff .= "  $_\n"  for  $diff->Items(2);
-	return $changesdiff;
+        my $changesdiff = '';
+        $changesdiff .= "  $_\n"  for  $diff->Items(2);
+        # some cleanups
+        $changesdiff =~ s/[ \t\r]+\n/\n/g; # no trailing spaces or line feeds
+        $changesdiff =~ s/\n\n\n+/\n\n/g; # not more than a single empty line
+        # sanitize diffs with too many empty lines
+        my $emptylines = 0;
+        while($changesdiff =~ /\n\n/g) { ++$emptylines; }
+        $changesdiff =~ s/\n\n/\n/g if $emptylines > 3;
+        return $changesdiff;
     }
     return '';
 }
@@ -1673,6 +1681,8 @@ END
         else {
             $cltxt .= "- initial package $version\n * created by $NAME $VERSION";
         }
+        $cltxt .= "\n"; # ensure line termination
+        $cltxt =~ s/\n+$/\n/; # drop multi-lines at the end, osc adds one again
         print $tfh $cltxt;
         system("osc vc -F $tmpfile $basename.changes") if !$skip;
         close($tfh);
