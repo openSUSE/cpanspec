@@ -10,6 +10,7 @@ Requires:
 * perl(Parse::CPAN::Packages)
 * perl(Perl::PrereqScanner)
 * perl(Text::Autoformat)
+* perl(File::ShareDir::Install)
 
 EXAMPLE USE:
 ------------
