@@ -11,6 +11,7 @@ Requires:
 * perl(Perl::PrereqScanner)
 * perl(Text::Autoformat)
 * perl(File::ShareDir::Install)
+* perl(Module::Build::Tiny)
 
 EXAMPLE USE:
 ------------
