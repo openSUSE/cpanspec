@@ -663,7 +663,7 @@ sub check_dep($) {
 
 sub map_version($$) {
     my ($module, $version) = @_;
-    if (grep { $module eq $_ } qw/Module::Build CPAN::Meta::Requirements ExtUtils::PkgConfig Test::Exception Test::Number::Delta Time::Duration DateTime::Locale File::Path/ ) {
+    if (grep { $module eq $_ } qw/Module::Build CPAN::Meta::Requirements ExtUtils::PkgConfig Test::Exception Test::Number::Delta Time::Duration DateTime::Locale / ) {
 	my $nv = $version . "000000";
 	if ($nv =~ /^(.*\.[0-9]{6})/) {
 	    return $1;
