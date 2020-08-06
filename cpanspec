@@ -874,6 +874,8 @@ for my $ofile (@args) {
     my $bogus = 0;
     my $execs = 0;
     my $changes;
+    # Sort files, so that Changes comes before Changes.foo
+    @archive_files = sort @archive_files;
     my $changesfile;
     foreach my $entry (@archive_files) {
         my $version0=$version;
