@@ -729,6 +729,7 @@ sub is_license_file {
     return 1 if $file =~ /^licen[sc]e/;
     return 1 if $file =~ /^artistic/;
     return 1 if $file =~ /^mit/;
+    return 1 if $file =~ /^gpl/;
     return;
 }
 
