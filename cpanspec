@@ -973,6 +973,7 @@ for my $ofile (@args) {
             and $_ ne "pm_to_blib"
             and $_ ne "install.sh"
             and !/\.tar\./
+            and !/~$/
             } @files;
 
     # special subdir
