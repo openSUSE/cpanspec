@@ -26,3 +26,5 @@
 #custom_test: |-
 #startserver && make test
 #ignore_requires: Bizarre::Module
+#skip_doc: regexp_to_skip_for_doc.*
+#add_doc: files to add to docs

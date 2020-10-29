@@ -941,6 +941,18 @@ for my $ofile (@args) {
 
     my $authors="Authors:\n--------\n$author";
 
+    my @skipdoc;
+    for my $r (split(/ /, $config->{skip_doc} || '')) {
+        push(@skipdoc, $r);
+    }
+
+    sub doskip($) {
+        for my $s (@skipdoc) {
+            return 1 if $_ =~ /$s/;
+        }
+        return 0;
+    }
+
     my @doc=sort { $a cmp $b } grep {
                 !/\//
             and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak|spec)$/i
@@ -974,7 +986,13 @@ for my $ofile (@args) {
             and $_ ne "install.sh"
             and !/\.tar\./
             and !/~$/
+            and !doskip($_)
             } @files;
+
+    my %adddoc;
+    for my $r (split(/ /, $config->{add_doc} || '')) {
+        push(@doc, $r);
+    }
 
     # special subdir
     push(@doc, "examples") if grep(/^examples\//, @files);
