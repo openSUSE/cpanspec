@@ -1,7 +1,7 @@
 ---
 abstract: 'Generate a spec file for a CPAN module'
 author:
-  - 'Steven Pritchard <steve@cpan.org>'
+  - 'openSUSE perl maintainers'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -35,4 +35,4 @@ recommends:
   IO::Uncompress::Bunzip2: 0
 resources:
   license: http://dev.perl.org/licenses/
-version: 1.78.08
+version: 1.79.01

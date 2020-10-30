@@ -1,3 +1,7 @@
+1.79.1
+* new release for openSUSE, changes see in git repository
+  https://github.com/openSUSE/cpanspec
+
 1.78.5 
 * convert from Build.PL to Makefile.PL
 
