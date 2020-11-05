@@ -189,7 +189,7 @@ use strict;
 use warnings;
 
 our $NAME    = "cpanspec";
-our $VERSION = '1.79.01';
+our $VERSION = '1.80.01';
 
 use Cwd;
 BEGIN {
@@ -1648,6 +1648,8 @@ END
         print $spec "\%{_bindir}/*\n";
         # FIXME - How do we auto-detect man pages?
     }
+
+    print $spec $config->{"misc"} if $config->{"misc"};
 
     print $spec <<END;
 
