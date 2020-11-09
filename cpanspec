@@ -1361,6 +1361,8 @@ END
     if ($config->{patches}) {
         $counter = 0;
         for my $p (sort keys %{$config->{patches}}) {
+            my $args = $config->{patches}->{$p} || '';
+            print $spec "# $1\n" if $args =~ / ?(PATCH-FIX.*)/;
             print $spec "Patch$counter:   $p\n";
             $counter++;
         }
@@ -1485,6 +1487,7 @@ END
         my $counter = 0;
         for my $p (sort keys %{$config->{patches}}) {
             my $args = $config->{patches}->{$p} || '';
+            $args =~ s/ ?PATCH-FIX.*//;
             print $spec "%patch$counter $args\n";
             $counter++;
         }
