@@ -1297,6 +1297,7 @@ END
     my $version_string = '%{version}';
 
     print $spec <<END;
+%define cpan_name $name
 Name:           $prefix$name
 Version:        $rpm_version
 Release:        $release
@@ -1325,7 +1326,6 @@ END
         print $spec "License:   $license\n";
     }
     print $spec <<END;
-%define cpan_name $name
 Summary:        $summary
 Url:            $url
 END
