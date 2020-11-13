@@ -1554,7 +1554,7 @@ END
               if ($compat and !$noarch);
 
             print $spec <<END;
-$cmdmake \%{?_smp_mflags}
+\%make_build
 
 END
         }
