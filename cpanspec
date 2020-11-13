@@ -1328,7 +1328,6 @@ END
 %define cpan_name $name
 Summary:        $summary
 Url:            $url
-Group:          Development/Libraries/Perl
 END
     my $sfile = basename($ofile);
     $sfile =~ s/$name/\%{cpan_name}/;
@@ -1375,7 +1374,6 @@ END
     else {
         printf $spec "%-16s%s\n", "BuildArch:", "noarch" if $noarch;
     }
-    print $spec "BuildRoot:      \%{_tmppath}/\%{name}-\%{version}-build\n";
 
     printf $spec "%-16s%s\n", "BuildRequires:", "perl";
     printf $spec "%-16s%s\n", "BuildRequires:", "perl-macros";
@@ -1628,7 +1626,6 @@ END
     }
 
     print $spec "\%files -f \%{name}.files\n";
-    print $spec "\%defattr(-,root,root,755)\n";
 
     if (%hdoc) {
 	my (@ldoc, @hdoc);
