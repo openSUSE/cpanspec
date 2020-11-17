@@ -10,6 +10,7 @@
 #patches:
 #  foo.patch: -p1
 #  bar.patch:
+#  baz.patch: PATCH-FIX-OPENSUSE
 #preamble: |-
 # BuildRequires:  gcc-c++
 #post_prep: |-
