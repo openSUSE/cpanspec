@@ -1713,6 +1713,7 @@ END
         $cltxt =~ s/\n+$/\n/; # drop multi-lines at the end, osc adds one again
         print $tfh $cltxt;
         system("osc vc -F $tmpfile $basename.changes") if !$skip;
+        die "osc vc failed with $?" if $?;
         close($tfh);
     }
 }
