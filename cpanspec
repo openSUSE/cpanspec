@@ -946,12 +946,12 @@ for my $ofile (@args) {
         push(@skipdoc, $r);
     }
 
-    sub doskip($) {
+    my $doskip = sub {
         for my $s (@skipdoc) {
             return 1 if $_ =~ /$s/;
         }
         return 0;
-    }
+    };
 
     my @doc=sort { $a cmp $b } grep {
                 !/\//
@@ -986,7 +986,7 @@ for my $ofile (@args) {
             and $_ ne "install.sh"
             and !/\.tar\./
             and !/~$/
-            and !doskip($_)
+            and !$doskip->($_)
             } @files;
 
     my %adddoc;
