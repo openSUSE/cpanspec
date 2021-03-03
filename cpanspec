@@ -220,6 +220,8 @@ use File::Temp;
 use File::Path qw(rmtree);
 use Intrusive;
 use Perl::PrereqScanner;
+use Encode qw/ decode_utf8 /;
+use Encode::Guess;
 
 require Carp;
 
@@ -456,14 +458,18 @@ sub is_in_core($$) {
     return $ret;
 }
 
-sub readfile($) {
+sub readfile {
+    my ($filename, $encoding) = @_;
+    $encoding //= '';
     local $/ = undef;
-    my $filename = shift;
     die "empty filename" unless length($filename);
-    open FILE, $basedir . $filename or return undef;
-    binmode FILE;
-    my $string = <FILE>;
-    close FILE;
+    open my $fh, "<", $basedir . $filename or return undef;
+    binmode $fh;
+    my $string = <$fh>;
+    if ($encoding eq 'guess') {
+        $string = decode_latin_or_utf8($string);
+    }
+    close $fh;
     return $string;
 }
 
@@ -901,7 +907,7 @@ for my $ofile (@args) {
         my $candidate = lc $entry;
         if (!$changes && ($candidate =~ m/^changes/ || $candidate =~ m/^changelog/ || $candidate =~ m/^history/)) {
             $changesfile = $entry;
-            $changes     = readfile("$path/$entry");
+            $changes     = readfile("$path/$entry", 'guess');
         }
 
         if (-x "$basedir$path/$entry" && -f "$basedir$path/$entry") {
@@ -1703,6 +1709,7 @@ END
         my $changes_diff;
 
         my ($tfh, $tmpfile) = File::Temp::tempfile;
+        binmode $tfh, ':encoding(UTF-8)';
         my $cltxt = "";
 
         if (-f $changelogfile) {
@@ -1710,6 +1717,7 @@ END
             $cltxt .= $txt;
             if ($old_file && $changes) {
                 my $old_changes = extract_old_changes($old_file, $changesfile);
+                $old_changes = decode_latin_or_utf8($old_changes);
                 $old_changes =~ s,\r\n,\n,g;
                 $cltxt .= diff_changes($old_changes, $changes) if $old_changes;
             }
@@ -1736,6 +1744,17 @@ END
         die "osc vc failed with $?" if $?;
         close($tfh);
     }
+}
+
+sub decode_latin_or_utf8 {
+    my ($string) = @_;
+    my $enc = guess_encoding($string, qw/ utf8 latin1 /);
+    unless (ref $enc) {
+        return decode_utf8 $string;
+    }
+    #my $name = $enc->name;
+    $string = $enc->decode($string);
+    return $string;
 }
 
 # vi: set ai et:
