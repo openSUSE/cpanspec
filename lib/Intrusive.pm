@@ -72,6 +72,9 @@ sub _find_modules {
     my $WriteMakefile = sub {
         my %args = @_;
         $self->requires( $args{PREREQ_PM} || {} );
+        my %br = %{ $args{TEST_REQUIRES} || {} };
+        %br = (%br, %{ $args{BUILD_REQUIRES} }) if $args{BUILD_REQUIRES};
+        $self->build_requires( \%br );
         1;
     };
     local *main::WriteMakefile;
