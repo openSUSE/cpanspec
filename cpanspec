@@ -1256,15 +1256,15 @@ for my $ofile (@args) {
             $packages{$pkg->namespace} = 1;
         }
 
-	my $scan; # = eval { $scanner->scan_ppi_document($doc)->as_string_hash; };
-	next unless $scan;
-	my %scanneddeps = %$scan; 
-	foreach my $dep (keys(%scanneddeps)) {
-	    my $ndep = $scanneddeps{$dep};
-	    unless ($build_requires{$dep} && version->parse($build_requires{$dep}) > version->parse($ndep)) {
-                $possible_build_requires{$dep} = $scanneddeps{$dep};
-            }
-        }
+#        my $scan; # = eval { $scanner->scan_ppi_document($doc)->as_string_hash; };
+#        next unless $scan;
+#        my %scanneddeps = %$scan;
+#        foreach my $dep (keys(%scanneddeps)) {
+#            my $ndep = $scanneddeps{$dep};
+#            unless ($build_requires{$dep} && version->parse($build_requires{$dep}) > version->parse($ndep)) {
+#                $possible_build_requires{$dep} = $scanneddeps{$dep};
+#            }
+#        }
     }
 
     foreach my $pkg (keys %packages) { delete $build_requires{$pkg} }
