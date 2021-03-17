@@ -187,6 +187,7 @@ L<perl(1)>, L<cpan2rpm(1)>, L<cpanflute2(1)>
 
 use strict;
 use warnings;
+use 5.010;
 
 our $NAME    = "cpanspec";
 our $VERSION = '1.80.01';
@@ -222,6 +223,7 @@ use Intrusive;
 use Perl::PrereqScanner;
 use Encode qw/ decode_utf8 /;
 use Encode::Guess;
+use JSON::PP ();
 
 require Carp;
 
@@ -250,6 +252,7 @@ our $config_file;
 our $old_file;
 our $config = {};
 our $cpan = $ENV{'CPAN'} || 'https://cpan.metacpan.org';
+my $debug;
 
 our $home = $ENV{'HOME'} || (getpwuid($<))[7];
 die "Can't locate home directory.  Please define \$HOME.\n"
@@ -770,6 +773,7 @@ GetOptions(
     'version'             => \&print_version,
     'prefer-macros|m'     => \$macros,
     'pkgdetails=s'        => \$pkgdetails,
+    'debug'               => \$debug,
 ) or pod2usage({-exitval => 1, -verbose => 0});
 
 pod2usage({-exitval => 0, -verbose => 1}) if ($help);
@@ -1083,8 +1087,27 @@ for my $ofile (@args) {
 
     my $scripts = 0;
     my (%build_requires, %requires, %recommends, %possible_build_requires);
-    my ($yml, $meta);
-    if (grep /^META\.yml$/, @files and $yml = readfile("$path/META.yml")) {
+    my %provides;
+    my ($meta, $metajson);
+    my $dynamic = 1;
+
+    if (grep { $_ eq 'META.json' } @files) {
+        open my $fh, '<', "$basedir/$path/META.json" or die $!;
+        my $json = do { local $/; <$fh> };
+        close $fh;
+        my $decoder = JSON::PP->new->utf8;
+        $metajson = $decoder->decode($json);
+        unless ($metajson->{dynamic_config}) {
+            $dynamic = 0;
+        }
+        if ($metajson->{provides}) {
+            for my $pkg (keys %{ $metajson->{provides} || {} }) {
+                $provides{ $pkg } = 1;
+            }
+        }
+    }
+
+    if (grep /^META\.yml$/, @files and my $yml = readfile("$path/META.yml")) {
         # Basic idea borrowed from Module::Depends.
         my $meta;
         eval { $meta = Load($yml); };
@@ -1172,6 +1195,11 @@ for my $ofile (@args) {
                 warn "Unknown license in meta '" . $meta->{license} . "'!\n";
             }
         }
+        if (not %provides and $meta->{provides}) {
+            for my $pkg (keys %{ $meta->{provides} || {} }) {
+                $provides{ $pkg } = 1;
+            }
+        }
       SKIP:
     }
 
@@ -1230,6 +1258,7 @@ for my $ofile (@args) {
     }
 
     my $deps      = Intrusive->new->dist_dir($basedir . $path)->find_modules;
+    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$deps], ['deps']);
     my %lrequires = %{$deps->requires};
     foreach my $dep (keys(%lrequires)) {
         $requires{$dep} = $lrequires{$dep};
@@ -1242,32 +1271,35 @@ for my $ofile (@args) {
         $build_requires{$dep} = $lrequires{$dep};
     }
 
-    my %packages = ();
+    my $provides = keys %provides;
+    $debug and say "########## PROVIDES: $provides\n";
+    unless (%provides) {
 
-    my $scanner = Perl::PrereqScanner->new;
-    foreach my $test (grep /\.(pm|t|PL|pl)/, @files) {
-        my $doc = PPI::Document->new($basedir . $path . "/" . $test);
+        my $scanner = Perl::PrereqScanner->new;
+        foreach my $test (grep /\.(pm|t|PL|pl)/, @files) {
+            my $doc = PPI::Document->new($basedir . $path . "/" . $test);
 
-        next unless ($doc);
+            next unless ($doc);
 
-        # Get the name of the main package
-        my $pkg = $doc->find_first('PPI::Statement::Package');
-        if ($pkg) {
-            $packages{$pkg->namespace} = 1;
-        }
+            # Get the name of the main package
+            my $pkg = $doc->find_first('PPI::Statement::Package');
+            if ($pkg) {
+                $provides{$pkg->namespace} = 1;
+            }
 
-#        my $scan; # = eval { $scanner->scan_ppi_document($doc)->as_string_hash; };
-#        next unless $scan;
-#        my %scanneddeps = %$scan;
-#        foreach my $dep (keys(%scanneddeps)) {
-#            my $ndep = $scanneddeps{$dep};
-#            unless ($build_requires{$dep} && version->parse($build_requires{$dep}) > version->parse($ndep)) {
-#                $possible_build_requires{$dep} = $scanneddeps{$dep};
+#            my $scan; # = eval { $scanner->scan_ppi_document($doc)->as_string_hash; };
+#            next unless $scan;
+#            my %scanneddeps = %$scan;
+#            foreach my $dep (keys(%scanneddeps)) {
+#                my $ndep = $scanneddeps{$dep};
+#                unless ($build_requires{$dep} && version->parse($build_requires{$dep}) > version->parse($ndep)) {
+#                    $possible_build_requires{$dep} = $scanneddeps{$dep};
+#                }
 #            }
-#        }
+        }
     }
 
-    foreach my $pkg (keys %packages) { delete $build_requires{$pkg} }
+    foreach my $pkg (keys %provides) { delete $build_requires{$pkg} }
 
     my %hdoc;
     if (@doc) {
