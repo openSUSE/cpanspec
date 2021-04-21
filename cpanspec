@@ -191,6 +191,7 @@ use 5.010;
 
 our $NAME    = "cpanspec";
 our $VERSION = '1.80.01';
+my $script = __FILE__;
 
 use Cwd;
 BEGIN {
@@ -219,13 +220,15 @@ use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(rmtree);
-use Intrusive;
 use Perl::PrereqScanner;
 use Encode qw/ decode_utf8 /;
 use Encode::Guess;
 use JSON::PP ();
 
 require Carp;
+
+my $bin = Cwd::abs_path(dirname($script));
+my $coder = JSON::PP->new->utf8;
 
 our %opt;
 
@@ -1095,8 +1098,7 @@ for my $ofile (@args) {
         open my $fh, '<', "$basedir/$path/META.json" or die $!;
         my $json = do { local $/; <$fh> };
         close $fh;
-        my $decoder = JSON::PP->new->utf8;
-        $metajson = $decoder->decode($json);
+        $metajson = $coder->decode($json);
         unless ($metajson->{dynamic_config}) {
             $dynamic = 0;
         }
@@ -1257,13 +1259,14 @@ for my $ofile (@args) {
         $build_requires{'ExtUtils::MakeMaker'} = 0;
     }
 
-    my $deps      = Intrusive->new->dist_dir($basedir . $path)->find_modules;
-    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$deps], ['deps']);
-    my %lrequires = %{$deps->requires};
+    my $intrusive = qq{perl $bin/bin/intrusive.pl $basedir$path};
+    my $jsondeps = qx{$intrusive};
+    my $deps = $coder->decode($jsondeps);
+    my %lrequires = %{ $deps->{requires} };
     foreach my $dep (keys(%lrequires)) {
         $requires{$dep} = $lrequires{$dep};
     }
-    %lrequires = %{$deps->build_requires};
+    %lrequires = %{ $deps->{build_requires} };
     foreach my $dep (keys(%lrequires)) {
         if (defined $build_requires{$dep}) {
             next if version->parse($build_requires{$dep}) > version->parse($lrequires{$dep});
