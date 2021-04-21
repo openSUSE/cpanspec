@@ -1283,7 +1283,11 @@ for my $ofile (@args) {
         # Basic idea borrowed from Module::Depends.
         my $intrusive = qq{perl $bin/bin/intrusive.pl $basedir$path};
         my $jsondeps = qx{$intrusive};
-        my $deps = $coder->decode($jsondeps);
+        my $deps = eval { $coder->decode($jsondeps) };
+        unless ($deps) {
+            warn "JSON: >>$jsondeps<<";
+            die $@;
+        }
         my %lrequires = %{ $deps->{requires} };
         foreach my $dep (keys(%lrequires)) {
             $requires{$dep} = $lrequires{$dep};

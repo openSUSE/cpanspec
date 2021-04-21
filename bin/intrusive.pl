@@ -11,7 +11,15 @@ my $coder = JSON::PP->new->utf8->pretty->canonical;
 
 my ($path) = @ARGV;
 
+# Makefile.PL etc. might print things to STDOUT, temporary redirect
+# to STDERR
+open my $orig, ">&", STDOUT;
+open STDOUT, ">&STDERR";
+
 my $deps = Intrusive->new->dist_dir($path)->find_modules;
+
+# restore STDOUT
+open STDOUT, ">&", $orig;
 
 my $json = $coder->encode({%$deps});
 print $json;
