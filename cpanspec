@@ -1103,24 +1103,29 @@ for my $ofile (@args) {
         open my $fh, '<', "$basedir/$path/META.json" or die $!;
         my $json = do { local $/; <$fh> };
         close $fh;
-        $metajson = $coder->decode($json);
-        unless ($metajson->{dynamic_config}) {
-            $dynamic = 0;
+        $metajson = eval { $coder->decode($json) };
+        if ($@) {
+            warn "Error decoding META.json, ignoring ($@)";
         }
+        else {
+            if (exists $metajson->{dynamic_config} and not $metajson->{dynamic_config}) {
+                $dynamic = 0;
+            }
 
-        my ($prov, $build, $run, $rec) = prereqs_from_metajson($metajson);
-        if (keys %$prov) {
-            @provides{ keys %$prov } = values %$prov;
+            my ($prov, $build, $run, $rec) = prereqs_from_metajson($metajson);
+            if (keys %$prov) {
+                @provides{ keys %$prov } = values %$prov;
+            }
+            if ($build) {
+                %build_requires = %$build;
+                %requires = %$run;
+                %recommends = %$rec;
+                $got_prereqs = 1;
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
+            }
         }
-        if ($build) {
-            %build_requires = %$build;
-            %requires = %$run;
-            %recommends = %$rec;
-            $got_prereqs = 1;
-        }
-        warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
-        warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
-        warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
     }
 
     warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$got_prereqs], ['got_prereqs']);
@@ -1132,7 +1137,7 @@ for my $ofile (@args) {
             warn "Error parsing $path/META.yml: $@";
             goto SKIP;
         }
-        unless ($meta->{dynamic_config}) {
+        if (exists $meta->{dynamic_config} and not $meta->{dynamic_config}) {
             $dynamic = 0;
         }
 
