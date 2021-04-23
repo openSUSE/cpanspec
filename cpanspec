@@ -227,6 +227,7 @@ use JSON::PP ();
 
 require Carp;
 
+my $url="https://metacpan.org/release/\%{cpan_name}";
 my $bin = Cwd::abs_path(dirname($script));
 my $coder = JSON::PP->new->utf8;
 
@@ -885,6 +886,7 @@ for my $ofile (@args) {
         push(@archive_files, $archive->memberNames());
     }
 
+    my %stats;
     my @files = ();
     my $bogus = 0;
     my $execs = 0;
@@ -893,6 +895,7 @@ for my $ofile (@args) {
     @archive_files = sort @archive_files;
     my $changesfile;
     foreach my $entry (@archive_files) {
+
         my $version0=$version;
         $version0=~s/0*$/0*/; # pathnames may not contain as many trailing zeros
         if (
@@ -932,8 +935,6 @@ for my $ofile (@args) {
         next;
     }
 
-    my $url="https://metacpan.org/release/\%{cpan_name}";
-
     get_source($name) if(!defined $source && -d dirname($pkgdetails));
 
     $content = get_content(
@@ -950,7 +951,6 @@ for my $ofile (@args) {
     }
 
     $summary = get_summary($summary, $content, $module) unless defined $summary;
-    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$summary], ['summary']);
 
     get_author($content) if (!defined($author));
 
@@ -1096,7 +1096,6 @@ for my $ofile (@args) {
     my $metayaml = -e "$basedir/$path/META.yml" ? 1 : '';
     my $metajson = -e "$basedir/$path/META.json" ? 1 : '';
     my $dynamic = 1;
-    warn "META.json: $metajson META.yml: $metayaml";
     my $got_prereqs = 0;
 
     if ($metajson) {
@@ -1106,8 +1105,10 @@ for my $ofile (@args) {
         $metajson = eval { $coder->decode($json) };
         if ($@) {
             warn "Error decoding META.json, ignoring ($@)";
+            $stats{metajson} = 'error';
         }
         else {
+            $stats{metajson} = 1;
             if (exists $metajson->{dynamic_config} and not $metajson->{dynamic_config}) {
                 $dynamic = 0;
             }
@@ -1121,28 +1122,35 @@ for my $ofile (@args) {
                 %requires = %$run;
                 %recommends = %$rec;
                 $got_prereqs = 1;
-                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
-                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
-                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
+                if ($debug) {
+                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
+                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
+                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
+                }
+            }
+            $stats{license}->{metajson} = $metajson->{license};
+            if ($metajson->{abstract}) {
+                $stats{abstract}->{metajson} = $metajson->{abstract};
             }
         }
     }
-
-    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$got_prereqs], ['got_prereqs']);
 
     if ($metayaml) {
         my $yml = readfile("$path/META.yml");
         my $meta = eval { Load($yml); };
         if ($@) {
             warn "Error parsing $path/META.yml: $@";
+            $stats{metayaml} = 'error';
             goto SKIP;
         }
+        $stats{metayaml} = 1;
         if (exists $meta->{dynamic_config} and not $meta->{dynamic_config}) {
             $dynamic = 0;
         }
 
         if ($meta->{abstract} && $meta->{abstract} ne 'unknown') {
             my $abstract = $meta->{abstract};
+            $stats{abstract}->{metayaml} = $abstract;
             $summary = $abstract unless defined $summary;
         }
 
@@ -1156,17 +1164,20 @@ for my $ofile (@args) {
             %requires = %$run;
             %recommends = %$rec;
             $got_prereqs = 1;
-            warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
-            warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
-            warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
+            if ($debug) {
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
+            }
         }
-        warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$got_prereqs], ['got_prereqs']);
+        $stats{got_prereqs} = $got_prereqs; # did we get static dependencies?
 
         # FIXME - I'm not sure this is sufficient...
         if ($meta->{script_files} or $meta->{scripts}) {
             $scripts = 1;
         }
 
+        $stats{license}->{metayaml} = $meta->{license};
         if ($meta->{license}) {
             # This list of licenses is from the Module::Build::API
             # docs, cross referenced with the list of licenses in
@@ -1220,7 +1231,8 @@ for my $ofile (@args) {
         }
       SKIP:
     }
-    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$dynamic], ['dynamic']);
+    $stats{dynamic} = $dynamic;
+    $debug and warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$dynamic], ['dynamic']);
 
     if (!defined($license)) {
         get_license($content);
@@ -1240,8 +1252,10 @@ for my $ofile (@args) {
     }
 
     $license = "CHECK($perllicense)" if (!$license);
+    $stats{license}->{spec} = $license;
 
     $description = $summary if (!defined($description));
+    $stats{summary} = $summary;
 
     $summary =~ s,\.$,,;
     $summary =~ s,^[aA] ,,;
@@ -1277,7 +1291,7 @@ for my $ofile (@args) {
     }
 
     if ($got_prereqs and not $dynamic) {
-        warn "Got prereqs, no need to run Makefile.PL/Build.PL";
+        $debug and warn "Got prereqs, no need to run Makefile.PL/Build.PL";
     }
     else {
         # Basic idea borrowed from Module::Depends.
@@ -1301,9 +1315,10 @@ for my $ofile (@args) {
         }
     }
 
-    my $provides = keys %provides;
-    warn "########## PROVIDES: $provides\n";
+    $stats{provides} = keys %provides;
+    dump_statistics($module, $version, \%stats);
     unless (%provides) {
+        verbose("No 'provides' info in meta, parsing code.\n");
         %provides = parse_provides($basedir . $path, \@files);
     }
 
@@ -1886,6 +1901,16 @@ sub decode_latin_or_utf8 {
     #my $name = $enc->name;
     $string = $enc->decode($string);
     return $string;
+}
+
+sub dump_statistics {
+    my ($module, $version, $stats) = @_;
+    $stats->{name} = $module;
+    $stats->{version} = $version;
+    my $yaml = YAML::XS::Dump($stats);
+    $yaml =~ s/^/# STATS # /mg;
+    $yaml = "# STATS # # $module, $version\n$yaml";
+    verbose($yaml);
 }
 
 # vi: set ai et:
