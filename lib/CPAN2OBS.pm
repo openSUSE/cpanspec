@@ -527,10 +527,13 @@ sub osc_update_dist {
         my $cmd = sprintf
             "timeout 180 perl $cpanspec -v -f --pkgdetails %s --skip-changes %s > cpanspec.error 2>&1",
             "$data/02packages.details.txt.gz", $tar;
+        debug("CMD $cmd");
         if (system $cmd or not -f $spec) {
             info("Error executing cpanspec");
+            system("cat cpanspec.error");
         }
         else {
+            system("cat cpanspec.error");
             $error = 0;
             unlink "cpanspec.error";
         }
@@ -668,7 +671,7 @@ sub osc_update_dist_perl {
     copy("$Bin/../cpanspec.yml", "$checkout/cpanspec.yml") unless -f "cpanspec.yml";
     {
         my $cmd = sprintf
-            "timeout 900 perl $cpanspec -f --pkgdetails %s --old-file %s %s > cpanspec.error 2>&1",
+            "timeout 900 perl $cpanspec -v -f --pkgdetails %s --old-file %s %s > cpanspec.error 2>&1",
             "$data/02packages.details.txt.gz", ".osc/$old_tar", $tar;
         debug("CMD $cmd");
         if (system $cmd or not -f $spec) {
