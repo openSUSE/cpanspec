@@ -187,9 +187,11 @@ L<perl(1)>, L<cpan2rpm(1)>, L<cpanflute2(1)>
 
 use strict;
 use warnings;
+use 5.010;
 
 our $NAME    = "cpanspec";
 our $VERSION = '1.80.01';
+my $script = __FILE__;
 
 use Cwd;
 BEGIN {
@@ -218,12 +220,16 @@ use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(rmtree);
-use Intrusive;
 use Perl::PrereqScanner;
 use Encode qw/ decode_utf8 /;
 use Encode::Guess;
+use JSON::PP ();
 
 require Carp;
+
+my $url="https://metacpan.org/release/\%{cpan_name}";
+my $bin = Cwd::abs_path(dirname($script));
+my $coder = JSON::PP->new->utf8;
 
 our %opt;
 
@@ -250,6 +256,7 @@ our $config_file;
 our $old_file;
 our $config = {};
 our $cpan = $ENV{'CPAN'} || 'https://cpan.metacpan.org';
+my $debug;
 
 our $home = $ENV{'HOME'} || (getpwuid($<))[7];
 die "Can't locate home directory.  Please define \$HOME.\n"
@@ -541,9 +548,8 @@ sub get_description {
     return $description = undef;
 }
 
-sub get_summary($$) {
-    my $cont   = shift;
-    my $mod    = shift;
+sub get_summary {
+    my ($summary, $cont, $mod) = @_;
     my $parser = Pod::POM->new;
 
     # extract pod; the file may contain no pod, that's ok
@@ -558,7 +564,7 @@ sub get_summary($$) {
         $pom =~ /^[^-]+ -* (.*)$/m;
 
         # return...
-        return $summary = $1 if $pom;
+        return "$1" if $1;
     }
     return $summary;
 }
@@ -770,6 +776,7 @@ GetOptions(
     'version'             => \&print_version,
     'prefer-macros|m'     => \$macros,
     'pkgdetails=s'        => \$pkgdetails,
+    'debug'               => \$debug,
 ) or pod2usage({-exitval => 1, -verbose => 0});
 
 pod2usage({-exitval => 0, -verbose => 1}) if ($help);
@@ -797,13 +804,15 @@ for my $r (split(/ /, $config->{ignore_requires} || '')) {
 }
 my @args      = @ARGV;
 my @processed = ();
+local $Data::Dumper::Sortkeys = 1;
 
 for my $ofile (@args) {
 
     my $type = undef;
     my $download = undef;
+    my $summary;
     ($file, $name, $source, $version) = (undef, undef, undef, undef);
-    ($content, $summary, $description, $author, $license) = (undef, undef, undef, undef, undef);
+    ($content, $description, $author, $license) = (undef, undef, undef, undef);
 
     if ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $file    = $ofile;
@@ -877,6 +886,7 @@ for my $ofile (@args) {
         push(@archive_files, $archive->memberNames());
     }
 
+    my %stats;
     my @files = ();
     my $bogus = 0;
     my $execs = 0;
@@ -885,6 +895,7 @@ for my $ofile (@args) {
     @archive_files = sort @archive_files;
     my $changesfile;
     foreach my $entry (@archive_files) {
+
         my $version0=$version;
         $version0=~s/0*$/0*/; # pathnames may not contain as many trailing zeros
         if (
@@ -924,8 +935,6 @@ for my $ofile (@args) {
         next;
     }
 
-    my $url="https://metacpan.org/release/\%{cpan_name}";
-
     get_source($name) if(!defined $source && -d dirname($pkgdetails));
 
     $content = get_content(
@@ -941,7 +950,7 @@ for my $ofile (@args) {
 	get_description($content) || get_description($content, 'OVERVIEW');
     }
 
-    get_summary($content,$module) if (!defined($summary));
+    $summary = get_summary($summary, $content, $module) unless defined $summary;
 
     get_author($content) if (!defined($author));
 
@@ -1082,45 +1091,93 @@ for my $ofile (@args) {
     $license = undef;
 
     my $scripts = 0;
-    my (%build_requires, %requires, %recommends, %possible_build_requires);
-    my ($yml, $meta);
-    if (grep /^META\.yml$/, @files and $yml = readfile("$path/META.yml")) {
-        # Basic idea borrowed from Module::Depends.
-        my $meta;
-        eval { $meta = Load($yml); };
+    my (%build_requires, %requires, %recommends);
+    my %provides;
+    my $metayaml = -e "$basedir/$path/META.yml" ? 1 : '';
+    my $metajson = -e "$basedir/$path/META.json" ? 1 : '';
+    my $dynamic = 1;
+    my $got_prereqs = 0;
+
+    if ($metajson) {
+        open my $fh, '<', "$basedir/$path/META.json" or die $!;
+        my $json = do { local $/; <$fh> };
+        close $fh;
+        $metajson = eval { $coder->decode($json) };
+        if ($@) {
+            warn "Error decoding META.json, ignoring ($@)";
+            $stats{metajson} = 'error';
+        }
+        else {
+            $stats{metajson} = 1;
+            if (exists $metajson->{dynamic_config} and not $metajson->{dynamic_config}) {
+                $dynamic = 0;
+            }
+
+            my ($prov, $build, $run, $rec) = prereqs_from_metajson($metajson);
+            if (keys %$prov) {
+                @provides{ keys %$prov } = values %$prov;
+            }
+            if ($build) {
+                %build_requires = %$build;
+                %requires = %$run;
+                %recommends = %$rec;
+                $got_prereqs = 1;
+                if ($debug) {
+                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
+                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
+                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
+                }
+            }
+            $stats{license}->{metajson} = $metajson->{license};
+            if ($metajson->{abstract}) {
+                $stats{abstract}->{metajson} = $metajson->{abstract};
+            }
+        }
+    }
+
+    if ($metayaml) {
+        my $yml = readfile("$path/META.yml");
+        my $meta = eval { Load($yml); };
         if ($@) {
             warn "Error parsing $path/META.yml: $@";
+            $stats{metayaml} = 'error';
             goto SKIP;
+        }
+        $stats{metayaml} = 1;
+        if (exists $meta->{dynamic_config} and not $meta->{dynamic_config}) {
+            $dynamic = 0;
         }
 
         if ($meta->{abstract} && $meta->{abstract} ne 'unknown') {
             my $abstract = $meta->{abstract};
-            $summary = $abstract if (!defined($summary));
+            $stats{abstract}->{metayaml} = $abstract;
+            $summary = $abstract unless defined $summary;
         }
 
-        %build_requires = %{$meta->{build_requires}} if ($meta->{build_requires});
-        if ($meta->{configure_requires}) {
-            while (my ($key, $value) = each(%{$meta->{configure_requires}})) {
-                if (defined $build_requires{$key}) {
-                    next if version->parse($build_requires{$key}) > version->parse($value);
-                }
-                $build_requires{$key} = $value;
-            }
-        }
-        if ($meta->{test_requires}) {
-            while (my ($key, $value) = each(%{$meta->{test_requires}})) {
-                $build_requires{$key} = $value;
-            }
+        my ($prov, $build, $run, $rec) = prereqs_from_metayaml($meta);
+        if (not %provides and keys %$prov) {
+            @provides{ keys %$prov } = values %$prov;
         }
 
-        %requires   = %{$meta->{requires}}   if ($meta->{requires});
-        %recommends = %{$meta->{recommends}} if ($meta->{recommends});
+        if (not $got_prereqs and $build) {
+            %build_requires = %$build;
+            %requires = %$run;
+            %recommends = %$rec;
+            $got_prereqs = 1;
+            if ($debug) {
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
+                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
+            }
+        }
+        $stats{got_prereqs} = $got_prereqs; # did we get static dependencies?
 
         # FIXME - I'm not sure this is sufficient...
         if ($meta->{script_files} or $meta->{scripts}) {
             $scripts = 1;
         }
 
+        $stats{license}->{metayaml} = $meta->{license};
         if ($meta->{license}) {
             # This list of licenses is from the Module::Build::API
             # docs, cross referenced with the list of licenses in
@@ -1174,6 +1231,8 @@ for my $ofile (@args) {
         }
       SKIP:
     }
+    $stats{dynamic} = $dynamic;
+    $debug and warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$dynamic], ['dynamic']);
 
     if (!defined($license)) {
         get_license($content);
@@ -1193,8 +1252,10 @@ for my $ofile (@args) {
     }
 
     $license = "CHECK($perllicense)" if (!$license);
+    $stats{license}->{spec} = $license;
 
     $description = $summary if (!defined($description));
+    $stats{summary} = $summary;
 
     $summary =~ s,\.$,,;
     $summary =~ s,^[aA] ,,;
@@ -1226,54 +1287,45 @@ for my $ofile (@args) {
         }
     }
     else {
-        $build_requires{'ExtUtils::MakeMaker'} = 0;
+        $build_requires{'ExtUtils::MakeMaker'} ||= 0;
     }
 
-    my $deps      = Intrusive->new->dist_dir($basedir . $path)->find_modules;
-    my %lrequires = %{$deps->requires};
-    foreach my $dep (keys(%lrequires)) {
-        $requires{$dep} = $lrequires{$dep};
+    if ($got_prereqs and not $dynamic) {
+        $debug and warn "Got prereqs, no need to run Makefile.PL/Build.PL";
     }
-    %lrequires = %{$deps->build_requires};
-    foreach my $dep (keys(%lrequires)) {
-        if (defined $build_requires{$dep}) {
-            next if version->parse($build_requires{$dep}) > version->parse($lrequires{$dep});
+    else {
+        # Basic idea borrowed from Module::Depends.
+        my $intrusive = qq{perl $bin/bin/intrusive.pl $basedir$path};
+        my $jsondeps = qx{$intrusive};
+        my $deps = eval { $coder->decode($jsondeps) };
+        unless ($deps) {
+            warn "JSON: >>$jsondeps<<";
+            die $@;
         }
-        $build_requires{$dep} = $lrequires{$dep};
-    }
-
-    my %packages = ();
-
-    my $scanner = Perl::PrereqScanner->new;
-    foreach my $test (grep /\.(pm|t|PL|pl)/, @files) {
-        my $doc = PPI::Document->new($basedir . $path . "/" . $test);
-
-        next unless ($doc);
-
-        # Get the name of the main package
-        my $pkg = $doc->find_first('PPI::Statement::Package');
-        if ($pkg) {
-            $packages{$pkg->namespace} = 1;
+        my %lrequires = %{ $deps->{requires} };
+        foreach my $dep (keys(%lrequires)) {
+            $requires{$dep} = $lrequires{$dep};
         }
-
-	my $scan; # = eval { $scanner->scan_ppi_document($doc)->as_string_hash; };
-	next unless $scan;
-	my %scanneddeps = %$scan; 
-	foreach my $dep (keys(%scanneddeps)) {
-	    my $ndep = $scanneddeps{$dep};
-	    unless ($build_requires{$dep} && version->parse($build_requires{$dep}) > version->parse($ndep)) {
-                $possible_build_requires{$dep} = $scanneddeps{$dep};
+        %lrequires = %{ $deps->{build_requires} };
+        foreach my $dep (keys(%lrequires)) {
+            if (defined $build_requires{$dep}) {
+                next if version->parse($build_requires{$dep}) > version->parse($lrequires{$dep});
             }
+            $build_requires{$dep} = $lrequires{$dep};
         }
     }
 
-    foreach my $pkg (keys %packages) { delete $build_requires{$pkg} }
+    $stats{provides} = keys %provides;
+    dump_statistics($module, $version, \%stats);
+    unless (%provides) {
+        verbose("No 'provides' info in meta, parsing code.\n");
+        %provides = parse_provides($basedir . $path, \@files);
+    }
 
+    delete @build_requires{ keys %provides };
     my %hdoc;
-    if (@doc) {
-        foreach my $d (@doc) {
-            $hdoc{$d} = 1;
-        }
+    foreach my $d (@doc) {
+        $hdoc{$d} = 1;
     }
 
     rmtree($basedir);
@@ -1390,9 +1442,6 @@ END
     }
 
     my @treqs = sort(keys(%build_requires));
-    foreach my $dep (sort(keys(%possible_build_requires))) {
-        push(@treqs, $dep) if (!defined $build_requires{$dep});
-    }
     for my $dep (@treqs) {
         my $iscore = 0;
         eval { $iscore = is_in_core($dep, $build_requires{$dep}); };
@@ -1746,6 +1795,90 @@ END
     }
 }
 
+sub prereqs_from_metayaml {
+    my ($meta) = @_;
+    my (%provides, %build_requires, %requires, %recommends);
+
+    if ($meta->{provides}) {
+        for my $pkg (keys %{ $meta->{provides} || {} }) {
+            $provides{ $pkg } = 1;
+        }
+    }
+
+    %build_requires = %{$meta->{build_requires}} if ($meta->{build_requires});
+    if ($meta->{configure_requires}) {
+        while (my ($key, $value) = each(%{$meta->{configure_requires}})) {
+            if (defined $build_requires{$key}) {
+                next if version->parse($build_requires{$key}) > version->parse($value);
+            }
+            $build_requires{$key} = $value;
+        }
+    }
+    if ($meta->{test_requires}) {
+        while (my ($key, $value) = each(%{$meta->{test_requires}})) {
+            $build_requires{$key} = $value;
+        }
+    }
+
+    %requires   = %{$meta->{requires}}   if ($meta->{requires});
+    %recommends = %{$meta->{recommends}} if ($meta->{recommends});
+    return (\%provides)
+        if (not %build_requires and not %requires and not %recommends);
+    return (\%provides, \%build_requires, \%requires, \%recommends);
+}
+
+sub prereqs_from_metajson {
+    my ($metajson) = @_;
+    my (%provides, %build, %run, %rec);
+    if ($metajson->{provides}) {
+        for my $pkg (keys %{ $metajson->{provides} || {} }) {
+            $provides{ $pkg } = 1;
+        }
+    }
+
+    my $prereqs = $metajson->{prereqs};
+    return (\%provides) unless keys %$prereqs;
+
+    for my $phase (qw/ build configure test /) {
+        if (my $build = $prereqs->{ $phase }) {
+            my $req = $build->{requires} || {};
+            for my $module (sort keys %$req) {
+                next if exists $build{ $module } and
+                    version->parse($build{ $module }) > version->parse( $req->{ $module });
+                $build{ $module } = $req->{ $module };
+            }
+        }
+    }
+    for my $phase (qw/ runtime /) {
+        if (my $build = $prereqs->{ $phase }) {
+            my $req = $build->{requires} || {};
+            @run{ keys %$req } = values %$req;
+            my $rec = $build->{recommends} || {};
+            @rec{ keys %$rec } = values %$rec;
+        }
+    }
+    return (\%provides, \%build, \%run, \%rec);
+}
+
+sub parse_provides {
+    my ($path, $files) = @_;
+    my %provides;
+    my $scanner = Perl::PrereqScanner->new;
+    foreach my $test (grep /\.(pm|t|PL|pl)/, @$files) {
+        my $doc = PPI::Document->new($path . "/" . $test);
+
+        next unless ($doc);
+
+        # Get the name of the main package
+        my $pkg = $doc->find_first('PPI::Statement::Package');
+        if ($pkg) {
+            $provides{$pkg->namespace} = 1;
+        }
+
+    }
+    return %provides;
+}
+
 sub decode_latin_or_utf8 {
     my ($string) = @_;
     my $enc = guess_encoding($string, qw/ utf8 latin1 /);
@@ -1755,6 +1888,16 @@ sub decode_latin_or_utf8 {
     #my $name = $enc->name;
     $string = $enc->decode($string);
     return $string;
+}
+
+sub dump_statistics {
+    my ($module, $version, $stats) = @_;
+    $stats->{name} = $module;
+    $stats->{version} = $version;
+    my $yaml = YAML::XS::Dump($stats);
+    $yaml =~ s/^/# STATS # /mg;
+    $yaml = "# STATS # # $module, $version\n$yaml";
+    verbose($yaml);
 }
 
 # vi: set ai et:
