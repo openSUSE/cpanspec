@@ -1,8 +1,28 @@
+1.81.01 2021-05-07 18:32:43+02:00
+
+* Also read from META.json
+* Read 'dynamic_config' and 'provides' from META files
+* Move Intrusive.pm into its own subprocess
+* Add --debug option
+* Add statistics output
+* Add batch processing script for testing changes on a number of packages
+
+1.80.01
+
+* support opensuse patch comments (PATCH-FIX-UPSTREAM)
+* add misc block, e.g. for subpackages
+
 1.79.1
 * new release for openSUSE, changes see in git repository
   https://github.com/openSUSE/cpanspec
+* smaller bug-fixes
+* add add_doc and skip_doc to allow changing docs handling
+* ignore some more unwanted files in doc handling
+* fix package requires
+* reduce changelog space wasting, document option --old-file
+* update copyrights
 
-1.78.5 
+1.78.5
 * convert from Build.PL to Makefile.PL
 
 1.78    2009-01-16
