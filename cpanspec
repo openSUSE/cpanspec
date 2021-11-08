@@ -224,6 +224,7 @@ use Perl::PrereqScanner;
 use Encode qw/ decode_utf8 /;
 use Encode::Guess;
 use JSON::PP ();
+use Data::Dumper;
 
 require Carp;
 
