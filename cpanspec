@@ -563,8 +563,13 @@ sub get_summary {
         my $pom = $head1->content;
         $pom =~ /^[^-]+ -* (.*)$/m;
 
-        # return...
-        return "$1" if $1;
+        my $s = $1;
+        if($s)
+        {
+          # strip markup
+          $s =~ s/C<([^>]+)>/$1/g;
+          return $s;
+        }
     }
     return $summary;
 }
