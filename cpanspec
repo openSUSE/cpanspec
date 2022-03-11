@@ -276,7 +276,7 @@ our @add_provides;
 our @add_buildrequires;
 
 our ($file, $name, $source, $version);
-our ($content, $summary, $description, $author, $license);
+our ($content, $summary, $description, $author);
 
 # env. vars and their macro analogues
 my @MACROS = (
@@ -380,23 +380,22 @@ sub update_packages() {
 }
 
 sub get_file($) {
-    my $type;
-    $file = shift;
-    # Look up $file in 02packages.details.txt.
-    verbose("Get file $file");
+    my $ofile = shift;
+    my ($file, $name, $version, $type);
+    # Look up $ofile in 02packages.details.txt.
+    verbose("Get file $ofile");
     update_packages();
     if (!defined($packages)) {
         verbose "parsing packages";
         $packages = Parse::CPAN::Packages->new($pkgdetails);
         verbose "done";
     }
-    die "Parse::CPAN::Packages->new() failed: $!\n"
-      if (!defined($packages));
+    die "Parse::CPAN::Packages->new() failed: $!\n" unless defined $packages;
     my ($m, $d);
-    if ($m = $packages->package($file) and $d = $m->distribution()) {
+    if ($m = $packages->package($ofile) and $d = $m->distribution()) {
         $source = $cpan . "/authors/id/" . $d->prefix();
         $file   = basename($d->filename());
-        fetch($source, $file) if (!-f $file);
+        fetch($source, $file) unless -f $file;
         $name    = $d->dist();
         $version = $d->version();
         $version =~ s/^v\.?//;
@@ -405,7 +404,7 @@ sub get_file($) {
     else {
         warn "Failed to parse '$file' or find a module by that name, skipping...\n";
     }
-    return $type;
+    return ($file, $name, $version, $type);
 }
 
 sub get_source($) {
@@ -485,18 +484,18 @@ sub get_content(%) {
     my $pm   = "";
     my $cont;
 
-    my $path = $args{module};
-    $path =~ s,::,/,g;
-    my @pmfiles = ("lib/$path.pod", "lib/$path.pm");
+    my $path = $args{module};     # YAML::PP::LibYAML
+    $path =~ s,::,/,g;            # YAML/PP/LibYAML
+    my @pmfiles = ("lib/$path.pod", "lib/$path.pm"); # lib/YAML/PP/LibYAML.{pm,pod}
     if ($args{module} =~ /::/) {
-        my @tmp = split '/', $path;
-        my $last = pop @tmp;
-        push(@pmfiles, "lib/$last.pod", "lib/$last.pm");
+        my @tmp = split '/', $path; # YAML PP LibYAML
+        my $last = pop @tmp;        # LibYAML
+        push(@pmfiles, "lib/$last.pod", "lib/$last.pm"); # lib/LibYAML.{pm,pod}
     }
     do {
         push(@pmfiles, "$path.pod", "$path.pm");
-    } while ($path =~ s,^[^/]+/,,);
-    push(@pmfiles, "$args{module}")
+    } while ($path =~ s,^[^/]+/,,);   # PP/LibYAML -> LibYAML
+    push(@pmfiles, "$args{module}")   # DateTime
       if ($args{module} !~ /::/);
 
     for my $file (@pmfiles) {
@@ -578,6 +577,7 @@ sub get_author($) {
     my $cont   = shift;
     my @lines  = ();
     my $parser = Pod::POM->new;
+    my $author;
 
     # extract pod; the file may contain no pod, that's ok
     my $pom = $parser->parse_text($cont);
@@ -602,11 +602,12 @@ sub get_author($) {
         # return...
         return $author;
     }
-    return $author = 'sorry, no author found';
+    return 'sorry, no author found';
 }
 
-sub get_license($) {
+sub get_license_from_content($) {
     my $cont   = shift;
+    my $license;
     my @lines  = ();
     my $parser = Pod::POM->new;
 
@@ -616,7 +617,7 @@ sub get_license($) {
   HEAD1:
     foreach my $head1 ($pom->head1) {
 
-        next HEAD1 unless $head1->title =~ /LICENSE/i || $head1->title =~ /COPYRIGHT/i;
+        next HEAD1 unless $head1->title =~ /LICEN[CS]E/i || $head1->title =~ /COPYRIGHT/i;
 
         my $pom = $head1->content;
         eval { $license = $pom->present('Pod::POM::View::Text'); };
@@ -632,11 +633,17 @@ sub get_license($) {
         $license = join " ", @lines;
         $license =~ s,\s+, ,g;
 
+        if ($license
+            && (   $license =~ /under the same terms (and conditions )?as Perl/
+                || $license =~ /same terms as the Perl 5/
+                || $license =~ /under the terms of the Perl artistic license/
+                || $license =~ qr/free software.*dev.perl.org.* for more information/)) {
+            $license = $perllicense;
+        }
         # return...
         return $license;
     }
-    return $license = undef;
-
+    return undef;
 }
 
 sub check_rpm($) {
@@ -817,7 +824,8 @@ for my $ofile (@args) {
     my $download = undef;
     my $summary;
     ($file, $name, $source, $version) = (undef, undef, undef, undef);
-    ($content, $description, $author, $license) = (undef, undef, undef, undef);
+    my $license;
+    ($content, $description, $author) = (undef, undef, undef);
 
     if ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $file    = $ofile;
@@ -842,7 +850,7 @@ for my $ofile (@args) {
         $ofile =~ s/-/::/g;
 
         # Look up $file in 02packages.details.txt.
-        $type = get_file($ofile);
+        ($file, $name, $version, $type) = get_file($ofile);
         $download = 1;
     }
     next unless $name;
@@ -951,127 +959,24 @@ for my $ofile (@args) {
             path        => $path,
         );
 
+    $description = $config->{description} if $config->{description};
     if (!$description) {
-	get_description($content) || get_description($content, 'OVERVIEW');
+        get_description($content) || get_description($content, 'OVERVIEW');
     }
 
-    $summary = get_summary($summary, $content, $module) unless defined $summary;
+    # $author //= get_author($content);
+    # my $authors="Authors:\n--------\n$author";
 
-    get_author($content) if (!defined($author));
+    my @doc = find_doc($config, $path, @files);
 
-    my $authors="Authors:\n--------\n$author";
-
-    my @skipdoc;
-    for my $r (split(/ /, $config->{skip_doc} || '')) {
-        push(@skipdoc, $r);
-    }
-
-    my $doskip = sub {
-        for my $s (@skipdoc) {
-            return 1 if $_ =~ /$s/;
-        }
-        return 0;
-    };
-
-    my @doc=sort { $a cmp $b } grep {
-                !/\//
-            and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak|spec)$/i
-            and !/^\./
-            and !/~$/
-            and $_ ne $path
-            and $_ ne "MANIFEST"
-            and $_ ne "MANIFEST.SKIP"
-            and !/^INSTALL/i
-            and $_ ne "SIGNATURE"
-	    and !/^META\..+$/i
-	    and !/^MYMETA\..+$/i
-            and $_ ne "NINJA"
-            and $_ ne "c"
-            and $_ ne "configure"
-            and $_ ne "config.guess"
-            and $_ ne "config.sub"
-            and $_ ne "typemap"
-            and $_ ne "bin"
-            and $_ ne "lib"
-            and $_ ne "t"
-	    and $_ ne "xt"
-            and $_ ne "inc"
-	    and $_ ne "dist.ini.meta"
-            and $_ ne "autobuild.sh"
-	    and $_ ne "debian"
-	    and $_ ne "cpanfile"
-            and !/^perlcritic/
-	    and !/^perltidy/
-            and $_ ne "pm_to_blib"
-            and $_ ne "install.sh"
-            and !/\.tar\./
-            and !/~$/
-            and !$doskip->($_)
-            } @files;
-
-    my %adddoc;
-    for my $r (split(/ /, $config->{add_doc} || '')) {
-        push(@doc, $r);
-    }
-
-    # special subdir
-    push(@doc, "examples") if grep(/^examples\//, @files);
-    push(@doc, "doc") if grep(/^doc\//, @files);
-    push(@doc, "docs") if grep(/^docs\//, @files);
-    push(@doc, "util") if grep(/^util\//, @files);
-    push(@doc, "example") if grep(/^example\//, @files);
-    push(@doc, "samples") if grep(/^samples\//, @files);
-    push(@doc, "license") if grep(/^license\//, @files);
-
-    my $date=strftime("%a %b %d %Y", localtime);
+    my $date = strftime("%a %b %d %Y", localtime);
 
     my $noarch=!grep /\.(c|h|xs|inl)$/i, @files;
     my $vendorlib=($noarch ? "vendorlib" : "vendorarch");
     my $lib="\%{perl_$vendorlib}";
 
-    if (@filter_requires) {
-        my $script="$name-filter-requires.sh";
-        verbose "Writing $script...";
-        my $sh;
-        if ($force) {
-            rename($script, "$script~") if (-e $script);
-            $sh=new FileHandle ">$script";
-        } else {
-            $sh=new FileHandle $script, O_WRONLY|O_CREAT|O_EXCL;
-        }
-        die "Failed to create $script: $!\n" if (!$sh);
-
-        print $sh "#!/bin/sh\n\n"
-            . "\@\@PERL_REQ\@\@ \"\$\@\" | sed -e '/^$filter_requires[0]\$/d'";
-        if (@filter_requires > 1) {
-            for my $dep (@filter_requires[1..$#filter_requires]) {
-                print $sh " \\\n    -e '/^$dep\$/d'";
-            }
-        }
-        print $sh "\n";
-    }
-
-    if (@filter_provides) {
-        my $script = "$name-filter-provides.sh";
-        verbose "Writing $script...";
-        my $sh;
-        if ($force) {
-            rename($script, "$script~") if (-e $script);
-            $sh = new FileHandle ">$script";
-        }
-        else {
-            $sh = new FileHandle $script, O_WRONLY | O_CREAT | O_EXCL;
-        }
-        die "Failed to create $script: $!\n" if (!$sh);
-
-        print $sh "#!/bin/sh\n\n" . "\@\@PERL_PROV\@\@ \"\$\@\" | sed -e '/^$filter_provides[0]\$/d'";
-        if (@filter_provides > 1) {
-            for my $dep (@filter_provides[1 .. $#filter_provides]) {
-                print $sh " \\\n    -e '/^$dep\$/d'";
-            }
-        }
-        print $sh "\n";
-    }
+    filter_requires($name) if @filter_requires;
+    filter_provides($name) if @filter_provides;
 
     my $specfile = "$prefix$name.spec";
     verbose "Writing $specfile...";
@@ -1084,8 +989,7 @@ for my $ofile (@args) {
     else {
         $spec = new FileHandle "$specfile", O_WRONLY | O_CREAT | O_EXCL;
     }
-
-    if (!$spec) {
+    unless ($spec) {
         warn "Failed to create $specfile: $!\n";
         next;
     }
@@ -1093,192 +997,45 @@ for my $ofile (@args) {
     print $spec qq[\%{!?perl_$vendorlib: \%define perl_$vendorlib \%(eval "\`$cmdperl -V:install$vendorlib\`"; echo \$install$vendorlib)}\n\n]
       if ($compat);
 
-    $license = undef;
-
     my $scripts = 0;
-    my (%build_requires, %requires, %recommends);
-    my %provides;
-    my $metayaml = -e "$basedir/$path/META.yml" ? 1 : '';
-    my $metajson = -e "$basedir/$path/META.json" ? 1 : '';
+    my (%build_requires, %requires, %recommends, %provides);
     my $dynamic = 1;
     my $got_prereqs = 0;
 
-    if ($metajson) {
-        open my $fh, '<', "$basedir/$path/META.json" or die $!;
-        my $json = do { local $/; <$fh> };
-        close $fh;
-        $metajson = eval { $coder->decode($json) };
-        if ($@) {
-            warn "Error decoding META.json, ignoring ($@)";
-            $stats{metajson} = 'error';
+    if (-e "$basedir/$path/META.json") {
+        my $results = read_meta_json("$basedir/$path/META.json", \%stats);
+        $got_prereqs = $results->{got_prereqs};
+        $dynamic = $results->{dynamic};
+        $summary //= $results->{abstract};
+        if ($results->{build}) {
+            %build_requires = %{ $results->{build_requires} };
+            %requires = %{ $results->{requires} };
+            %recommends = %{ $results->{recommends} };
         }
-        else {
-            $stats{metajson} = 1;
-            if (exists $metajson->{dynamic_config} and not $metajson->{dynamic_config}) {
-                $dynamic = 0;
-            }
-
-            my ($prov, $build, $run, $rec) = prereqs_from_metajson($metajson);
-            if (keys %$prov) {
-                @provides{ keys %$prov } = values %$prov;
-            }
-            if ($build) {
-                %build_requires = %$build;
-                %requires = %$run;
-                %recommends = %$rec;
-                $got_prereqs = 1;
-                if ($debug) {
-                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
-                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
-                    warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
-                }
-            }
-            $stats{license}->{metajson} = $metajson->{license};
-            if ($metajson->{abstract}) {
-                $stats{abstract}->{metajson} = $metajson->{abstract};
-            }
-        }
-    }
-
-    if ($metayaml) {
-        my $yml = readfile("$path/META.yml");
-        my $meta = eval { Load($yml); };
-        if ($@) {
-            warn "Error parsing $path/META.yml: $@";
-            $stats{metayaml} = 'error';
-            goto SKIP;
-        }
-        $stats{metayaml} = 1;
-        if (exists $meta->{dynamic_config} and not $meta->{dynamic_config}) {
-            $dynamic = 0;
-        }
-
-        if ($meta->{abstract} && $meta->{abstract} ne 'unknown') {
-            my $abstract = $meta->{abstract};
-            $stats{abstract}->{metayaml} = $abstract;
-            $summary = $abstract unless defined $summary;
-        }
-
-        my ($prov, $build, $run, $rec) = prereqs_from_metayaml($meta);
-        if (not %provides and keys %$prov) {
+        if (my $prov = $results->{provides}) {
             @provides{ keys %$prov } = values %$prov;
         }
+        $got_prereqs = $results->{got_prereqs};
+    }
 
-        if (not $got_prereqs and $build) {
-            %build_requires = %$build;
-            %requires = %$run;
-            %recommends = %$rec;
-            $got_prereqs = 1;
-            if ($debug) {
-                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%build_requires], ['build_requires']);
-                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%requires], ['requires']);
-                warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%recommends], ['recommends']);
-            }
+    if (-e "$basedir/$path/META.yml") {
+        my $results = read_meta_yaml("$path/META.yml", \%stats);
+        $got_prereqs = $results->{got_prereqs};
+        $dynamic = $results->{dynamic};
+        $summary //= $results->{abstract};
+        if (not $got_prereqs and $results->{build}) {
+            %build_requires = %{ $results->{build_requires} };
+            %requires = %{ $results->{requires} };
+            %recommends = %{ $results->{recommends} };
         }
-        $stats{got_prereqs} = $got_prereqs; # did we get static dependencies?
-
-        # FIXME - I'm not sure this is sufficient...
-        if ($meta->{script_files} or $meta->{scripts}) {
-            $scripts = 1;
+        if (not keys %provides and my $prov = $results->{provides}) {
+            @provides{ keys %$prov } = values %$prov;
         }
-
-        $stats{license}->{metayaml} = $meta->{license};
-        if ($meta->{license}) {
-            # This list of licenses is from the Module::Build::API
-            # docs, cross referenced with the list of licenses in
-            # /usr/share/rpmlint/config.
-            if ($meta->{license} =~ /^perl$/i) {
-                $license = $perllicense;
-            }
-            elsif ($meta->{license} =~ /^apache$/i) {
-                $license = "Apache-2.0";
-            }
-            elsif ($meta->{license} =~ /^artistic$/i) {
-                $license = "Artistic-1.0";
-            }
-            elsif ($meta->{license} =~ /^artistic_?2$/i) {
-                $license = "Artistic-2.0";
-            }
-            elsif ($meta->{license} =~ /^bsd$/i) {
-                $license = "BSD-3-Clause";
-            }
-            elsif ($meta->{license} =~ /^gpl$/i) {
-                $license = "GPL-1.0-or-later";
-            }
-            elsif ($meta->{license} =~ /^gpl2$/i) {
-                $license = "GPL-2.0-or-later";
-            }
-            elsif ($meta->{license} =~ /^lgpl$/i) {
-                $license = "LGPL-2.1-or-later";
-            }
-            elsif ($meta->{license} =~ /^mit$/i) {
-                $license = "MIT";
-            }
-            elsif ($meta->{license} =~ /^mozilla$/i) {
-                $license = "MPL";
-            }
-            elsif ($meta->{license} =~ /^gpl3$/i) {
-                $license = "GPL-3.0-or-later";
-            }
-            elsif ($meta->{license} =~ /^open_source$/i || $meta->{license} =~ /^unrestricted$/i) {
-                $license = "SUSE-Public-Domain";    # rpmlint will complain
-            }
-            elsif ($meta->{license} =~ /^restrictive$/i) {
-                $license = "SUSE-NonFree";
-                warn "License is 'restrictive'." . "  This package should not be redistributed.\n";
-            }
-            elsif ($meta->{license} =~ /^unknown$/i) {
-                # do nothing, it's unknown and we know
-            }
-            else {
-                warn "Unknown license in meta '" . $meta->{license} . "'!\n";
-            }
-        }
-      SKIP:
+        $scripts = $results->{scripts};
+        $license = $results->{license};
     }
     $stats{dynamic} = $dynamic;
     $debug and warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$dynamic], ['dynamic']);
-
-    if (!defined($license)) {
-        get_license($content);
-        if (
-            $license
-            && (   $license =~ /under the same terms as Perl/
-                || $license =~ /same terms as the Perl 5/
-                || $license =~ /under the terms of the Perl artistic license/
-                || $license =~ qr/free software.*dev.perl.org.* for more information/))
-        {
-            $license = $perllicense;
-        }
-    }
-
-    if (!length($summary)) {
-        $summary = "$module Perl module";
-    }
-
-    $license = "CHECK($perllicense)" if (!$license);
-    $stats{license}->{spec} = $license;
-
-    $description = $summary if (!defined($description));
-    $stats{summary} = $summary;
-
-    $summary =~ s,\.$,,;
-    $summary =~ s,^[aA] ,,;
-    if ($summary ne ucfirst($summary)) {
-        # capitalize the damn thing - for real
-        $summary = ucfirst($summary);
-        #require Text::Capitalize;
-        #$summary = Text::Capitalize::capitalize_title($summary);
-    }
-    if (length($summary) > 79) {
-        $summary = substr($summary, 0, 72) . "[cut]";
-    }
-    if ($config->{summary}) {
-        $summary = $config->{summary};
-    }
-    if ($config->{description}) {
-        $description = $config->{description};
-    }
 
     my $usebuildpl  = 0;
     my $usebuildplt = 0;
@@ -1299,25 +1056,57 @@ for my $ofile (@args) {
         $debug and warn "Got prereqs, no need to run Makefile.PL/Build.PL";
     }
     else {
-        # Basic idea borrowed from Module::Depends.
-        my $intrusive = qq{perl $bin/bin/intrusive.pl $basedir$path};
-        my $jsondeps = qx{$intrusive};
-        my $deps = eval { $coder->decode($jsondeps) };
-        unless ($deps) {
-            warn "JSON: >>$jsondeps<<";
-            die $@;
+        # Run Makefile.PL/Build.PL and read from generated MYMETA.{json,yml}
+        my $cmd = "perl Makefile.PL";
+        if ($usebuildpl) {
+            $cmd = "perl Build.PL";
         }
-        my %lrequires = %{ $deps->{requires} };
-        foreach my $dep (keys(%lrequires)) {
-            $requires{$dep} = $lrequires{$dep};
+        my $out = qx{cd $basedir/$path; $cmd 2>&1};
+        if ($?) {
+            warn "Error when running $cmd: >>$out<<\n";
         }
-        %lrequires = %{ $deps->{build_requires} };
-        foreach my $dep (keys(%lrequires)) {
-            if (defined $build_requires{$dep}) {
-                next if version->parse($build_requires{$dep}) > version->parse($lrequires{$dep});
+        else {
+            my $dynamic_results;
+            if (-e "$basedir/$path/MYMETA.json") {
+                $dynamic_results = read_meta_json("$basedir/$path/MYMETA.json", \%stats);
             }
-            $build_requires{$dep} = $lrequires{$dep};
+            elsif (-e "$basedir/$path/MYMETA.yml") {
+                $dynamic_results = read_meta_yaml("$path/MYMETA.yml", \%stats);
+                $license //= $dynamic_results->{license};
+            }
+            $summary //= $dynamic_results->{abstract};
+            # Add possible new requirements to existing static ones
+            my %newrequires = %{ $dynamic_results->{requires} };
+            foreach my $dep (keys(%newrequires)) {
+                $requires{$dep} = $newrequires{$dep};
+            }
+            %newrequires = %{ $dynamic_results->{build_requires} };
+            foreach my $dep (keys(%newrequires)) {
+                if (defined $build_requires{$dep}) {
+                    next if version->parse($build_requires{$dep}) > version->parse($newrequires{$dep});
+                }
+                $build_requires{$dep} = $newrequires{$dep};
+            }
         }
+    }
+
+    $license //= get_license_from_content($content);
+    $license = "CHECK($perllicense)" unless $license;
+    $stats{license}->{spec} = $license;
+
+    $summary //= get_summary($summary, $content, $module);
+    $description //= $summary;
+    $stats{summary} = $summary;
+    $summary =~ s,\.$,,;
+    $summary =~ s,^[aA] ,,;
+    $summary = ucfirst $summary;
+    if (length($summary) > 79) {
+        $summary = substr($summary, 0, 72) . "[cut]";
+    }
+
+    $summary = $config->{summary} if $config->{summary};
+    if (not length $summary) {
+        $summary = "$module Perl module";
     }
 
     $stats{provides} = keys %provides;
@@ -1374,14 +1163,11 @@ END
 
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
     if ($config->{license}) {
-        if($config->{license} =~ /^Perl( License)?$/i)
-        {
-          $config->{license} = $perllicense;
+        if($config->{license} =~ /^Perl( License)?$/i) {
+            $config->{license} = $perllicense;
         }
-        if("CHECK($config->{license})" ne $license
-        && $config->{license} ne $license)
-        {
-          print $spec "#Upstream: $license\n";
+        if("CHECK($config->{license})" ne $license && $config->{license} ne $license) {
+            print $spec "#Upstream: $license\n";
         }
         print $spec "License:   $config->{license}\n";
     }
@@ -1895,6 +1681,211 @@ sub decode_latin_or_utf8 {
     return $string;
 }
 
+sub read_meta_json {
+    $debug and warn __PACKAGE__.':'.__LINE__.": =============== read_meta_json\n";
+    my ($file, $stats) = @_;
+    my %results = ( dynamic => 1 );
+    open my $fh, '<', $file or die $!;
+    my $json = do { local $/; <$fh> };
+    close $fh;
+    my $metajson = eval { $coder->decode($json) };
+    if ($@) {
+        warn "Error decoding META.json, ignoring ($@)";
+        $stats->{metajson} = 'error';
+        return;
+    }
+    $stats->{metajson} = 1;
+    if (exists $metajson->{dynamic_config} and not $metajson->{dynamic_config}) {
+        $results{dynamic} = 0;
+    }
+
+    my ($prov, $build, $run, $rec) = prereqs_from_metajson($metajson);
+    if (keys %$prov) {
+        @{ $results{provides} }{keys %$prov } = values %$prov;
+    }
+    if ($build) {
+        $results{build} = 1;
+        $results{build_requires} = $build;
+        $results{requires} = $run;
+        $results{recommends} = $rec;
+        $results{got_prereqs} = 1;
+        if ($debug) {
+            warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%results], ['results']);
+        }
+    }
+    $results{license} = $metajson->{license};
+    if ($metajson->{abstract} && $metajson->{abstract} ne 'unknown') {
+        my $abstract = $metajson->{abstract};
+        $stats->{abstract}->{metajson} = $abstract;
+        $results{abstract} = $abstract;
+    }
+    $stats->{license}->{metajson} = $metajson->{license};
+    if ($metajson->{abstract}) {
+        $stats->{abstract}->{metajson} = $metajson->{abstract};
+    }
+
+    return \%results;
+}
+
+sub read_meta_yaml {
+    $debug and warn __PACKAGE__.':'.__LINE__.": =============== read_meta_yaml\n";
+    my ($file, $stats) = @_;
+    my $yml = readfile($file);
+    my $meta = eval { Load($yml); };
+    if ($@) {
+        warn "Error parsing $file: $@";
+        $stats->{metayaml} = 'error';
+        return;
+    }
+    my %results = ( dynamic => 1 );
+    $stats->{metayaml} = 1;
+    if (exists $meta->{dynamic_config} and not $meta->{dynamic_config}) {
+        $results{dynamic} = 0;
+    }
+
+    if ($meta->{abstract} && $meta->{abstract} ne 'unknown') {
+        my $abstract = $meta->{abstract};
+        $stats->{abstract}->{metayaml} = $abstract;
+        $results{abstract} = $abstract;
+    }
+
+    my ($prov, $build, $run, $rec) = prereqs_from_metayaml($meta);
+    if (keys %$prov) {
+        @{ $results{provides} }{keys %$prov } = values %$prov;
+    }
+
+    if ($build) {
+        $results{build} = 1;
+        $results{build_requires} = $build;
+        $results{requires} = $run;
+        $results{recommends} = $rec;
+        $results{got_prereqs} = 1;
+        if ($debug) {
+            warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\%results], ['results']);
+        }
+    }
+    $stats->{got_prereqs} = $results{got_prereqs}; # did we get static dependencies?
+
+    # FIXME - I'm not sure this is sufficient...
+    if ($meta->{script_files} or $meta->{scripts}) {
+        $results{scripts} = 1;
+    }
+    my $license;
+
+    $stats->{license}->{metayaml} = $meta->{license};
+    if ($meta->{license}) {
+        # This list of licenses is from the Module::Build::API
+        # docs, cross referenced with the list of licenses in
+        # /usr/share/rpmlint/config.
+        if ($meta->{license} =~ /^perl$/i) {
+            $license = $perllicense;
+        }
+        elsif ($meta->{license} =~ /^apache$/i) {
+            $license = "Apache-2.0";
+        }
+        elsif ($meta->{license} =~ /^artistic$/i) {
+            $license = "Artistic-1.0";
+        }
+        elsif ($meta->{license} =~ /^artistic_?2$/i) {
+            $license = "Artistic-2.0";
+        }
+        elsif ($meta->{license} =~ /^bsd$/i) {
+            $license = "BSD-3-Clause";
+        }
+        elsif ($meta->{license} =~ /^gpl$/i) {
+            $license = "GPL-1.0-or-later";
+        }
+        elsif ($meta->{license} =~ /^gpl2$/i) {
+            $license = "GPL-2.0-or-later";
+        }
+        elsif ($meta->{license} =~ /^lgpl$/i) {
+            $license = "LGPL-2.1-or-later";
+        }
+        elsif ($meta->{license} =~ /^mit$/i) {
+            $license = "MIT";
+        }
+        elsif ($meta->{license} =~ /^mozilla$/i) {
+            $license = "MPL";
+        }
+        elsif ($meta->{license} =~ /^gpl3$/i) {
+            $license = "GPL-3.0-or-later";
+        }
+        elsif ($meta->{license} =~ /^open_source$/i || $meta->{license} =~ /^unrestricted$/i) {
+            $license = "SUSE-Public-Domain";    # rpmlint will complain
+        }
+        elsif ($meta->{license} =~ /^restrictive$/i) {
+            $license = "SUSE-NonFree";
+            warn "License is 'restrictive'." . "  This package should not be redistributed.\n";
+        }
+        elsif ($meta->{license} =~ /^unknown$/i) {
+            # do nothing, it's unknown and we know
+        }
+        else {
+            warn "Unknown license in meta '" . $meta->{license} . "'!\n";
+        }
+    }
+    $results{license} = $license;
+    return \%results;
+}
+
+sub find_doc {
+    my ($config, $path, @files) = @_;
+
+    my @skipdoc = split ' ', ($config->{skip_doc} || '');
+    my $doskip = sub {
+        for my $s (@skipdoc) { return 1 if m/$s/ }
+        return 0;
+    };
+
+    my @doc = sort { $a cmp $b } grep {
+                !m{/}
+            and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak|spec)$/i
+            and !/^\./
+            and !/~$/
+            and $_ ne $path
+            and $_ ne "MANIFEST"
+            and $_ ne "MANIFEST.SKIP"
+            and $_ ne "SIGNATURE"
+            and $_ ne "NINJA"
+            and $_ ne "c"
+            and $_ ne "configure"
+            and $_ ne "config.guess"
+            and $_ ne "config.sub"
+            and $_ ne "typemap"
+            and $_ ne "bin"
+            and $_ ne "lib"
+            and $_ ne "t"
+            and $_ ne "xt"
+            and $_ ne "inc"
+            and $_ ne "dist.ini.meta"
+            and $_ ne "autobuild.sh"
+            and $_ ne "debian"
+            and $_ ne "cpanfile"
+            and $_ ne "pm_to_blib"
+            and $_ ne "install.sh"
+            and !/^INSTALL/i
+            and !/^META\..+$/i
+            and !/^MYMETA\..+$/i
+            and !/^perlcritic/
+            and !/^perltidy/
+            and !/\.tar\./
+            and !/~$/
+            and !$doskip->($_)
+        } @files;
+
+    push @doc, split ' ', ($config->{add_doc} || '');
+
+    # special subdir
+    push(@doc, "examples") if grep(/^examples\//, @files);
+    push(@doc, "doc") if grep(/^doc\//, @files);
+    push(@doc, "docs") if grep(/^docs\//, @files);
+    push(@doc, "util") if grep(/^util\//, @files);
+    push(@doc, "example") if grep(/^example\//, @files);
+    push(@doc, "samples") if grep(/^samples\//, @files);
+    push(@doc, "license") if grep(/^license\//, @files);
+    return @doc;
+}
+
 sub dump_statistics {
     my ($module, $version, $stats) = @_;
     $stats->{name} = $module;
@@ -1903,6 +1894,52 @@ sub dump_statistics {
     $yaml =~ s/^/# STATS # /mg;
     $yaml = "# STATS # # $module, $version\n$yaml";
     verbose($yaml);
+}
+
+sub filter_requires {
+    my ($name) = @_;
+    my $script="$name-filter-requires.sh";
+    verbose "Writing $script...";
+    my $sh;
+    if ($force) {
+        rename($script, "$script~") if (-e $script);
+        $sh=new FileHandle ">$script";
+    } else {
+        $sh=new FileHandle $script, O_WRONLY|O_CREAT|O_EXCL;
+    }
+    die "Failed to create $script: $!\n" if (!$sh);
+
+    print $sh "#!/bin/sh\n\n"
+        . "\@\@PERL_REQ\@\@ \"\$\@\" | sed -e '/^$filter_requires[0]\$/d'";
+    if (@filter_requires > 1) {
+        for my $dep (@filter_requires[1..$#filter_requires]) {
+            print $sh " \\\n    -e '/^$dep\$/d'";
+        }
+    }
+    print $sh "\n";
+}
+
+sub filter_provides {
+    my ($name) = @_;
+    my $script = "$name-filter-provides.sh";
+    verbose "Writing $script...";
+    my $sh;
+    if ($force) {
+        rename($script, "$script~") if (-e $script);
+        $sh = new FileHandle ">$script";
+    }
+    else {
+        $sh = new FileHandle $script, O_WRONLY | O_CREAT | O_EXCL;
+    }
+    die "Failed to create $script: $!\n" if (!$sh);
+
+    print $sh "#!/bin/sh\n\n" . "\@\@PERL_PROV\@\@ \"\$\@\" | sed -e '/^$filter_provides[0]\$/d'";
+    if (@filter_provides > 1) {
+        for my $dep (@filter_provides[1 .. $#filter_provides]) {
+            print $sh " \\\n    -e '/^$dep\$/d'";
+        }
+    }
+    print $sh "\n";
 }
 
 # vi: set ai et:
