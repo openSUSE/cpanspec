@@ -1074,18 +1074,23 @@ for my $ofile (@args) {
                 $dynamic_results = read_meta_yaml("$path/MYMETA.yml", \%stats);
                 $license //= $dynamic_results->{license};
             }
-            $summary //= $dynamic_results->{abstract};
-            # Add possible new requirements to existing static ones
-            my %newrequires = %{ $dynamic_results->{requires} };
-            foreach my $dep (keys(%newrequires)) {
-                $requires{$dep} = $newrequires{$dep};
+            else {
+                warn "No MYMETA files, output from build:>>>\n$out<<<";
             }
-            %newrequires = %{ $dynamic_results->{build_requires} };
-            foreach my $dep (keys(%newrequires)) {
-                if (defined $build_requires{$dep}) {
-                    next if version->parse($build_requires{$dep}) > version->parse($newrequires{$dep});
+            if ($dynamic_results) {
+                $summary //= $dynamic_results->{abstract};
+                # Add possible new requirements to existing static ones
+                my %newrequires = %{ $dynamic_results->{requires} };
+                foreach my $dep (keys(%newrequires)) {
+                    $requires{$dep} = $newrequires{$dep};
                 }
-                $build_requires{$dep} = $newrequires{$dep};
+                %newrequires = %{ $dynamic_results->{build_requires} };
+                foreach my $dep (keys(%newrequires)) {
+                    if (defined $build_requires{$dep}) {
+                        next if version->parse($build_requires{$dep}) > version->parse($newrequires{$dep});
+                    }
+                    $build_requires{$dep} = $newrequires{$dep};
+                }
             }
         }
     }
