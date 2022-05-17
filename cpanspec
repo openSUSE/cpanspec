@@ -1020,7 +1020,6 @@ for my $ofile (@args) {
 
     if (-e "$basedir/$path/META.yml") {
         my $results = read_meta_yaml("$path/META.yml", \%stats);
-        $got_prereqs = $results->{got_prereqs};
         $dynamic = $results->{dynamic};
         $summary //= $results->{abstract};
         if (not $got_prereqs and $results->{build}) {
@@ -1031,6 +1030,7 @@ for my $ofile (@args) {
         if (not keys %provides and my $prov = $results->{provides}) {
             @provides{ keys %$prov } = values %$prov;
         }
+        $got_prereqs = $results->{got_prereqs};
         $scripts = $results->{scripts};
         $license = $results->{license};
     }
