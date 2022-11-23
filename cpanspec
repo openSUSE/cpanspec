@@ -1100,6 +1100,7 @@ for my $ofile (@args) {
     $license = "CHECK($perllicense)" unless $license;
     $stats{license}->{spec} = $license;
 
+    $summary =~ s/[CL]<([^>]+)>/$1/g if defined $summary;
     $summary //= get_summary($summary, $content, $module);
     $description //= $summary;
     $stats{summary} = $summary;
