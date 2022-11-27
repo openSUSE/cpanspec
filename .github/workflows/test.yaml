@@ -1,0 +1,37 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  suse:
+    runs-on: ubuntu-latest
+    container:
+      image: registry.opensuse.org/opensuse/leap:15.4
+    steps:
+    - run: |
+        zypper -n install tar gzip
+    - uses: actions/checkout@v3
+    - run: >
+        zypper -n install perl-App-cpanminus make gcc
+
+        cpanm -n Archive::Zip Pod::POM Parse::CPAN::Packages
+        Text::Autoformat YAML::XS LWP::UserAgent Perl::PrereqScanner
+        Algorithm::Diff
+    - name: test
+      run: perl -c cpanspec
+
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: >
+        sudo apt-get install cpanminus
+
+        sudo cpanm -n Archive::Zip Pod::POM Parse::CPAN::Packages
+        Text::Autoformat YAML::XS LWP::UserAgent Perl::PrereqScanner
+        Algorithm::Diff
+    - name: test
+      run: perl -c cpanspec

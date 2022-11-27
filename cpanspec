@@ -209,7 +209,6 @@ use Archive::Zip qw(:ERROR_CODES);
 use POSIX;
 use locale;
 use Text::Autoformat;
-use YAML::Any qw(Dump Load LoadFile);
 use YAML::XS ();
 use Getopt::Long;
 use Pod::POM;
@@ -225,6 +224,7 @@ use Encode qw/ decode_utf8 /;
 use Encode::Guess;
 use JSON::PP ();
 use Data::Dumper;
+use Algorithm::Diff;
 
 require Carp;
 
@@ -711,7 +711,6 @@ sub diff_changes($$) {
     my @changes     = split qr/\n/, shift;
 
     #print $old_changes, $changes;
-    use Algorithm::Diff qw/sdiff/;
     my $diff = Algorithm::Diff->new(\@old_changes, \@changes);
 
     # ignore common prefix
@@ -1738,7 +1737,7 @@ sub read_meta_yaml {
     $debug and warn __PACKAGE__.':'.__LINE__.": =============== read_meta_yaml\n";
     my ($file, $stats) = @_;
     my $yml = readfile($file);
-    my $meta = eval { Load($yml); };
+    my $meta = eval { YAML::XS::Load($yml); };
     if ($@) {
         warn "Error parsing $file: $@";
         $stats->{metayaml} = 'error';
