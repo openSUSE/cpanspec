@@ -6,12 +6,16 @@ INSTALL:
 Requires:
 
 * perl(Algorithm::Diff)
+* perl(Archive::Zip)
 * perl(Class::Accessor::Chained)
+* perl(File::ShareDir::Install)
+* perl(LWP::UserAgent)
+* perl(Module::Build::Tiny)
 * perl(Parse::CPAN::Packages)
 * perl(Perl::PrereqScanner)
+* perl(Pod::POM)
 * perl(Text::Autoformat)
-* perl(File::ShareDir::Install)
-* perl(Module::Build::Tiny)
+* perl(YAML::XS)
 
 EXAMPLE USE:
 ------------
