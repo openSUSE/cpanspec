@@ -1052,6 +1052,7 @@ for my $ofile (@args) {
         $build_requires{'ExtUtils::MakeMaker'} ||= 0;
     }
 
+    $ENV{PERL_MM_USE_DEFAULT} = 1;
     if ($got_prereqs and not $dynamic) {
         $debug and warn "Got prereqs, no need to run Makefile.PL/Build.PL";
     }
