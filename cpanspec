@@ -1346,6 +1346,7 @@ END
     my $autosetup_arg = (!$config->{patches} || $all_patch_args_same) ? (defined($common_patch_args) ? " $common_patch_args" : "") : " -N";
         print $spec <<END;
 \%autosetup @{[($noprefix ? "" : " -n $buildpath")]}$autosetup_arg
+
 END
 
     if ($execs) {
