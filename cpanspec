@@ -190,7 +190,7 @@ use warnings;
 use 5.010;
 
 our $NAME    = "cpanspec";
-our $VERSION = '1.82.02';
+our $VERSION = '1.83.00';
 my $script = __FILE__;
 
 use Cwd;

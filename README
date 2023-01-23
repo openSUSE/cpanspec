@@ -10,12 +10,14 @@ Requires:
 * perl(Class::Accessor::Chained)
 * perl(File::ShareDir::Install)
 * perl(LWP::UserAgent)
+* perl(Module::Build)
 * perl(Module::Build::Tiny)
 * perl(Parse::CPAN::Packages)
 * perl(Perl::PrereqScanner)
 * perl(Pod::POM)
 * perl(Text::Autoformat)
 * perl(YAML::XS)
+* obs-service-format_spec_file
 
 EXAMPLE USE:
 ------------
