@@ -1847,7 +1847,7 @@ sub find_doc {
 
     my @doc = sort { $a cmp $b } grep {
                 !m{/}
-            and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak|spec)$/i
+            and !/\.(pl|xs|h|c|pm|ini?|pod|cfg|inl|bak|spec|yml|toml)$/i
             and !/^\./
             and !/~$/
             and $_ ne $path
