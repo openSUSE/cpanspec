@@ -1350,7 +1350,7 @@ END
 END
 
     if ($execs) {
-        print $spec qq{find . -type f ! -path "*/t/*" ! -name "*.pl" ! -path "*/bin/*" ! -path "*/script/*" ! -name "configure" -print0 | xargs -0 chmod 644\n};
+        print $spec qq{find . -type f ! -path "*/t/*" ! -name "*.pl" ! -path "*/bin/*" ! -path "*/script/*" ! -path "*/scripts/*" ! -name "configure" -print0 | xargs -0 chmod 644\n};
     }
 
     if ($config->{patches} && !$all_patch_args_same) {
