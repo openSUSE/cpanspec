@@ -1018,8 +1018,11 @@ for my $ofile (@args) {
         $got_prereqs = $results->{got_prereqs};
     }
 
-    if (-e "$basedir/$path/META.yml") {
-        my $results = read_meta_yaml("$path/META.yml", \%stats);
+    my $metayaml =
+        -e "$basedir/$path/META.yml" ? "$path/META.yml" :
+        -e "$basedir/$path/META.yaml" ? "$path/META.yaml" : undef;
+    if ($metayaml) {
+        my $results = read_meta_yaml($metayaml, \%stats);
         $dynamic = $results->{dynamic};
         $summary //= $results->{abstract};
         if (not $got_prereqs and $results->{build}) {
