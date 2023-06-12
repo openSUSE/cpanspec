@@ -1038,15 +1038,8 @@ for my $ofile (@args) {
     $debug and warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$dynamic], ['dynamic']);
 
     my $usebuildpl  = 0;
-    my $usebuildplt = 0;
     if (grep /^Build\.PL$/, @files) {
         $usebuildpl = 1;
-        if (defined $build_requires{'Module::Build::Tiny'}) {
-            $usebuildplt = 1;
-        }
-        else {
-            $build_requires{'Module::Build'} ||= 0;
-        }
     }
     else {
         $build_requires{'ExtUtils::MakeMaker'} ||= 0;
@@ -1408,17 +1401,10 @@ END
         print $spec $config->{custom_build} . "\n";
     }
     else {
-        if ($usebuildplt) {
+        if ($usebuildpl) {
             print $spec <<END;
 $makefile_env$cmdperl Build.PL --installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
 ./Build build --flags=\%{?_smp_mflags}
-
-END
-        }
-        elsif ($usebuildpl) {
-            print $spec <<END;
-$makefile_env$cmdperl Build.PL installdirs=vendor@{[$noarch ? '' : qq{ optimize="$macro{optimize}"} ]}
-./Build build flags=\%{?_smp_mflags}
 
 END
         }
@@ -1463,11 +1449,8 @@ END
 \%install
 END
 
-    if ($usebuildplt) {
+    if ($usebuildpl) {
         print $spec "./Build install --destdir=$macro{buildroot} --create_packlist=0\n";
-    }
-    elsif ($usebuildpl) {
-        print $spec "./Build install destdir=$macro{buildroot} create_packlist=0\n";
     }
     else {
         print $spec <<END;
