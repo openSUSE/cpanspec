@@ -1,3 +1,27 @@
+1.84.00 2023-07-09
+
+* Ignore toml and yml files (#43)
+* Exlude scripts/ from removing executable bit (#45)
+* Fix code for Module::Build(::Tiny) (#46)
+
+1.83.00 2023-01-23
+
+* Fix reading META.yml (#37)
+* fix --debug option by adding 'use Data::Dumper' (#31)
+* Strip pod from summary (#38)
+* Switch to faster CPAN mirror
+* Ensure non-interactive mode (#41)
+* Add blank line after %autosetup (#42)
+
+1.82.02 2022-05-05
+
+* Deal with missing MYMETA files (#34)
+
+1.82.01 2022-03-11
+
+* Drop perl markup in summary line (#32)
+* Read from MYMETA.{json,yml} (#33)
+
 1.81.01 2021-05-07 18:32:43+02:00
 
 * Also read from META.json
