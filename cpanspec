@@ -693,21 +693,12 @@ sub check_dep($) {
     return (check_rpm("perl($module)") || check_repo("perl($module)"));
 }
 
-my @fixed_versions = qw/
-    Module::Build CPAN::Meta::Requirements ExtUtils::PkgConfig Test::Exception
-    Test::Number::Delta Time::Duration DateTime::Locale File::Path
-/;
 sub map_version($$$) {
     my ($type, $module, $version) = @_;
 #    warn __PACKAGE__.':'.__LINE__.": ====== map_version(@_)\n";
-    if (grep { $module eq $_ } @fixed_versions) {
-        my $nv = $version . "000000";
-        if ($nv =~ /^(.*\.[0-9]{6})/) {
-            return $1;
-        }
-    }
     if ($dlp) {
         my $v = next_version($type, $module, $version);
+        debug_version("$type $module", $version, $v);
         $v =~ s/^v//;
         return $v;
     }
@@ -733,7 +724,6 @@ sub read_version_snapshot {
 
 sub next_version {
     my ($type, $module, $next) = @_;
-    my $dist = $module =~ s/::/-/gr;
     my $name = $module;
     my $current = $version_snapshot->{ $type }->{ $name };
     my $nextv = version->parse($next); # version object
@@ -1222,8 +1212,7 @@ for my $ofile (@args) {
     }
 
     rmtree($basedir);
-    my $rpm_version = map_version(module => $module, $version);
-    debug_version($module, $version, $rpm_version);
+    my $rpm_version = map_version(dist => $name, $version);
     my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 
     print $spec <<END;
@@ -1255,14 +1244,10 @@ Version:        $rpm_version
 Release:        $release
 END
 
-    my $skip_main_module_provide = 0;
     if ($rpm_version ne $version) {
         print $spec "%define cpan_version $version\n";
         $version_string = '%{cpan_version}';
-        print $spec "Provides:  perl($module) = $rpm_version\n";
-        $skip_main_module_provide = 1;
     }
-
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
     if ($config->{license}) {
         if($config->{license} =~ /^Perl( License)?$/i) {
@@ -1357,7 +1342,6 @@ END
             printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
             if ($build_requires{$dep}) {
                 my $mapped = map_version(module => $dep, $build_requires{$dep});
-                debug_version($dep, $build_requires{$dep},$mapped);
                 print $spec " >= $mapped";
             }
             print $spec "\n";
@@ -1376,7 +1360,6 @@ END
         printf $spec "%-16s%s", "Requires:", "perl($dep)";
         if ($requires{$dep}) {
             my $mapped = map_version(module => $dep, $requires{$dep});
-                debug_version($dep, $requires{$dep},$mapped);
             print $spec " >= $mapped";
         }
         print $spec "\n";
@@ -1386,12 +1369,10 @@ END
         printf $spec "%-16s%s\n", "Requires:", $dep;
     }
 
-
     for my $prov (@add_provides) {
         printf $spec "%-16s%s\n", "Provides:", $prov;
     }
     for my $package (sort keys %provides) {
-        next if $skip_main_module_provide and $package eq $module;
         my $version = $provides{ $package }->{version};
         my $prov = "perl($package)";
         if ($version) {
@@ -1406,7 +1387,10 @@ END
         next if (is_in_core($dep, $recommends{$dep}));
         next if ($dep eq 'perl');
         printf $spec "%-16s%s", "Recommends:", "perl($dep)";
-        print $spec (" >= " . $recommends{$dep}) if ($recommends{$dep});
+        if ($recommends{$dep}) {
+            my $mapped = map_version(module => $dep, $recommends{$dep});
+            print $spec " >= $mapped";
+        }
         print $spec "\n";
     }
 
