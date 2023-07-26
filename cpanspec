@@ -1782,7 +1782,7 @@ sub parse_provides {
             unless ($version) {
                 my $prov = find_version_statements("$path/$test");
                 for my $key (keys %$prov) {
-                    $provides{ $ns } = { file => $test, version => $prov->{ $key } };
+                    $provides{ $key } = { file => $test, version => $prov->{ $key } };
                 }
             }
             else {
