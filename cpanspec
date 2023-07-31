@@ -1216,6 +1216,10 @@ for my $ofile (@args) {
 
     rmtree($basedir);
     my $rpm_version = map_version(dist => $name, $version);
+    my $normal = 0;
+    if ($rpm_version ne $version and $rpm_version =~ m/^\d+\.\d+\./) {
+        $normal = 1;
+    }
     my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
     $year += 1900;
 
@@ -1373,17 +1377,29 @@ END
     for my $prov (@add_provides) {
         printf $spec "%-16s%s\n", "Provides:", $prov;
     }
-    for my $package (sort keys %provides) {
-        my $version = $provides{ $package }->{version};
-        my $prov = "perl($package)";
-        if ($version) {
-            my $rpm_version = map_version(module => $package, $version);
-            $prov .= " = $rpm_version";
+    if ($dlp and $normal) {
+        # only generate our own if package version is normal and there are no
+        # other provided modules with different versions
+        my $spec_provides = '';
+        my $diff_version = 0;
+
+        for my $package (sort keys %provides) {
+            my $version = $provides{ $package }->{version};
+            my $prov = "perl($package)";
+            if ($version) {
+                my $rpm_version = map_version(module => $package, $version);
+                $version =~ s/^v//;
+                $diff_version = 1 if $rpm_version ne $version;
+                $prov .= " = $rpm_version";
+            }
+            my $line = sprintf "%-16s%s\n", "Provides:", $prov;
+            $spec_provides .= $line;
         }
-        my $line = sprintf "%-16s%s\n", "Provides:", $prov;
-        print $spec $line;
+        if ($diff_version) {
+            print $spec $spec_provides;
+            print $spec "%define         __perllib_provides /bin/true\n";
+        }
     }
-    print $spec "%define         __perllib_provides /bin/true\n";
     for my $dep (sort(keys(%recommends))) {
         next if (is_in_core($dep, $recommends{$dep}));
         next if ($dep eq 'perl');
