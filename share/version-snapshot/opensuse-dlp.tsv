@@ -23504,3 +23504,4 @@ perl	5.38.0	warnings::register	1.05
 perl	5.38.0	Win32CORE	0.04
 perl	5.38.0	XS::APItest	1.32
 perl	5.38.0	XS::Typemap	0.19
+perl	5.36.0	Search::Dict	1.07
