@@ -1341,12 +1341,14 @@ END
             }
         }
         if (defined $build_requires{$dep}) {
+            my $mapped;
             if ($config->{ignored_requires}->{$dep}) {
                 printf $spec "#";
+                $mapped = $build_requires{$dep};
             }
             printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
             if ($build_requires{$dep}) {
-                my $mapped = map_version(module => $dep, $build_requires{$dep});
+                $mapped //= map_version(module => $dep, $build_requires{$dep});
                 print $spec " >= $mapped";
             }
             print $spec "\n";
@@ -1359,12 +1361,14 @@ END
 
     for my $dep (sort(keys(%requires))) {
         next if (is_in_core($dep, $requires{$dep}));
+        my $mapped;
         if ($config->{ignored_requires}->{$dep}) {
            printf $spec "#";
+           $mapped = $requires{$dep};
         }
         printf $spec "%-16s%s", "Requires:", "perl($dep)";
         if ($requires{$dep}) {
-            my $mapped = map_version(module => $dep, $requires{$dep});
+            $mapped //= map_version(module => $dep, $requires{$dep});
             print $spec " >= $mapped";
         }
         print $spec "\n";
