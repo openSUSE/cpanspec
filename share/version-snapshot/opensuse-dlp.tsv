@@ -15107,6 +15107,16 @@ Path-Router	0.15	Path::Router::Types	0.15
 Path-Router	0.15	Test::Path::Router	0.15
 Path-Tiny	0.144	Path::Tiny	0.144
 Path-Tiny	0.144	Path::Tiny::Error	0.144
+Path-Tools	3.75	File::Spec	3.75
+Path-Tools	3.75	File::Spec::AmigaOS	3.75
+Path-Tools	3.75	File::Spec::Cygwin	3.75
+Path-Tools	3.75	File::Spec::Epoc	3.75
+Path-Tools	3.75	File::Spec::Functions	3.75
+Path-Tools	3.75	File::Spec::Mac	3.75
+Path-Tools	3.75	File::Spec::OS2	3.75
+Path-Tools	3.75	File::Spec::Unix	3.75
+Path-Tools	3.75	File::Spec::VMS	3.75
+Path-Tools	3.75	File::Spec::Win32	3.75
 PAUSE-Permissions	0.17	PAUSE::Permissions	0.17
 PAUSE-Permissions	0.17	PAUSE::Permissions::Entry	0.17
 PAUSE-Permissions	0.17	PAUSE::Permissions::EntryIterator	0.17
