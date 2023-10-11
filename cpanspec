@@ -727,6 +727,10 @@ sub next_version {
     my $current = $version_snapshot->{ $type }->{ $name };
     my $nextv = version->parse($next); # version object
     my $normal = $nextv->normal;       # normalized version string with more than one dot
+    if ($next =~ m/^\d+\.\d+\./) {
+        # new version is already proper format for rpm, e.g. 3.14.159
+        return $normal;
+    }
     unless (defined $current) {
         warn "$module not found in snapshot";
         return $normal;
