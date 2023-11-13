@@ -23403,6 +23403,7 @@ perl	5.38.0	deprecate	0.04
 perl	5.38.0	Devel::Peek	1.33
 perl	5.38.0	diagnostics	1.39
 perl	5.38.0	DirHandle	1.05
+perl	5.38.0	DynaLoader	1.54
 perl	5.38.0	English	1.11
 perl	5.38.0	ExtUtils::Embed	1.35
 perl	5.38.0	ExtUtils::Miniperl	1.13
