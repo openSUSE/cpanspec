@@ -1396,10 +1396,15 @@ END
             my $version = $provides{ $package }->{version};
             my $prov = "perl($package)";
             if ($version) {
-                my $rpm_version = map_version(module => $package, $version);
+                my $prov_rpm_version = map_version(module => $package, $version);
                 $version =~ s/^v//;
-                $diff_version = 1 if $rpm_version ne $version;
-                $prov .= " = $rpm_version";
+                $diff_version = 1 if $prov_rpm_version ne $version;
+                if ($rpm_version eq $prov_rpm_version) {
+                    $prov .= " = %{version}";
+                }
+                else {
+                    $prov .= " = $prov_rpm_version";
+                }
             }
             my $line = sprintf "%-16s%s\n", "Provides:", $prov;
             $spec_provides .= $line;
