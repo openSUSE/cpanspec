@@ -219,6 +219,7 @@ use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(rmtree);
+use Encode qw/ encode_utf8 decode_utf8 /;
 use Encode qw/ decode_utf8 /;
 use Encode::Guess;
 use JSON::PP ();
@@ -1205,6 +1206,7 @@ for my $ofile (@args) {
     if (not length $summary) {
         $summary = "$module Perl module";
     }
+    $summary = encode_utf8 $summary;
 
     $stats{provides} = keys %provides;
     dump_statistics($module, $version, \%stats);
