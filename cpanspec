@@ -1413,7 +1413,7 @@ END
         }
         if ($diff_version) {
             print $spec $spec_provides;
-            print $spec "%define         __perllib_provides /bin/true\n";
+            print $spec "%undefine       __perllib_provides\n";
         }
     }
     for my $dep (sort(keys(%recommends))) {
