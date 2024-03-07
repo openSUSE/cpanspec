@@ -1353,9 +1353,9 @@ END
             my $args = $config->{patches}->{$p} || undef;
             if (defined($args)) {
                 $args =~ s/ ?PATCH-FIX.*//;
-                print $spec "%patch$counter $args\n";
+                print $spec "%patch -P$counter $args\n";
             } else {
-                print $spec "%patch$counter\n";
+                print $spec "%patch -P$counter\n";
             }
             $counter++;
         }
