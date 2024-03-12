@@ -22993,6 +22993,7 @@ perl	5.38.0	Net::hostent	1.03
 perl	5.38.0	Net::netent	1.01
 perl	5.38.0	Net::protoent	1.02
 perl	5.38.0	Net::servent	1.03
+perl	5.38.0	NEXT	0.69
 perl	5.38.0	O	1.03
 perl	5.38.0	ODBM_File	1.18
 perl	5.38.0	Opcode	1.64
