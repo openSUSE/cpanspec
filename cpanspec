@@ -1450,7 +1450,7 @@ END
     my $buildpath = $path;
     $buildpath =~ s/$name/\%{cpan_name}/;
     $buildpath =~ s/$version/$version_string/;
-    print $spec <<END;
+    print $spec encode_utf8(<<END);
 
 \%description
 $description
