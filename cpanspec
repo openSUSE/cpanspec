@@ -525,6 +525,7 @@ sub get_content(%) {
 
 sub get_description {
     my $cont   = shift;
+    return unless defined $cont;
     my $title  = shift || 'DESCRIPTION';
     my $parser = Pod::POM->new;
 
