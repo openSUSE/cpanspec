@@ -210,6 +210,7 @@ use POSIX;
 use locale;
 use Text::Autoformat;
 use YAML::XS ();
+use CPAN::Meta::YAML;
 use Getopt::Long;
 use Pod::POM;
 use PodViewSpec;
@@ -1883,13 +1884,16 @@ sub read_meta_json {
 sub read_meta_yaml {
     $debug and warn __PACKAGE__.':'.__LINE__.": =============== read_meta_yaml\n";
     my ($file, $stats) = @_;
-    my $yml = readfile($file);
-    my $meta = eval { YAML::XS::Load($yml); };
+    my $yaml = readfile($file);
+    # Some META.yml files have invalid unicode. CPAN::Meta::YAML seems to
+    # not care, YAML::XS dies
+    my $meta = eval { CPAN::Meta::YAML->read_string($yaml) };
     if ($@) {
         warn "Error parsing $file: $@";
         $stats->{metayaml} = 'error';
         return;
     }
+    $meta = $meta->[0];
     my %results = ( dynamic => 1 );
     $stats->{metayaml} = 1;
     if (exists $meta->{dynamic_config} and not $meta->{dynamic_config}) {
