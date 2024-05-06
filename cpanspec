@@ -1186,16 +1186,18 @@ Url:            $url
 END
     my $sfile = basename($ofile);
     $sfile =~ s/$name/\%{cpan_name}/;
-    $source =~ s/$name/\%{cpan_name}/ if $download;
+    $sfile =~ s/$version/%{version}/;
+    $source =~ s/$name/\%{cpan_name}/;
+    $source =~ s/$version/%{version}/;
 
     my $counter = 0;
     if ($source) {
-        if (basename($source) ne $sfile && $sfile !~ /::/) {
+#        if (basename($source) ne $sfile && $sfile !~ /::/) {
            # the current source URL is not the version we're looking for
            # just take a guess - authors don't change daily
-           $source = dirname($source) . "/$sfile";
-        }
-        $source =~ s,$version,$version_string,;
+#           $source = dirname($source) . "/$sfile";
+#        }
+#        $source =~ s,$version,$version_string,;
         print $spec "Source$counter:         $source\n";
     }
     else {
