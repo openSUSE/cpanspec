@@ -1201,7 +1201,7 @@ END
         print $spec "Source$counter:         $source\n";
     }
     else {
-        print $spec "Source$counter:         $ofile\n";
+        print $spec "Source$counter:         $sfile\n";
     }
     $counter++;
 
