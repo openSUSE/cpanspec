@@ -22937,6 +22937,7 @@ perl	5.38.0	B::Showlex	1.05
 perl	5.38.0	B::Terse	1.09
 perl	5.38.0	B::Xref	1.07
 perl	5.38.0	Benchmark	1.24
+perl	5.38.0	base	2.27
 perl	5.38.0	blib	1.07
 perl	5.38.0	builtin	0.008
 perl	5.38.0	bytes	1.08
@@ -22944,6 +22945,7 @@ perl	5.38.0	charnames	1.50
 perl	5.38.0	Class::Struct	0.68
 perl	5.38.0	Class::Struct::Tie_ISA	0.68
 perl	5.38.0	Config::Extensions	0.03
+perl	5.38.0	Cwd	3.89
 perl	5.38.0	DBM_Filter	0.06
 perl	5.38.0	DBM_Filter::compress	0.03
 perl	5.38.0	DBM_Filter::encode	0.03
@@ -22971,6 +22973,7 @@ perl	5.38.0	File::stat	1.13
 perl	5.38.0	FileCache	1.10
 perl	5.38.0	FileHandle	2.05
 perl	5.38.0	filetest	1.03
+perl	5.38.0	Filter::Simple	0.96
 perl	5.38.0	GDBM_File	1.24
 perl	5.38.0	Getopt::Std	1.13
 perl	5.38.0	GitUtils	undef
@@ -22989,6 +22992,7 @@ perl	5.38.0	less	0.03
 perl	5.38.0	locale	1.10
 perl	5.38.0	mro	1.28
 perl	5.38.0	NDBM_File	1.16
+perl	5.38.0	Net::SMTP	3.15
 perl	5.38.0	Net::hostent	1.03
 perl	5.38.0	Net::netent	1.01
 perl	5.38.0	Net::protoent	1.02
