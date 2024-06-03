@@ -824,8 +824,6 @@ my @args      = @ARGV;
 my @processed = ();
 local $Data::Dumper::Sortkeys = 1;
 
-use URI;
-
 for my $ofile (@args) {
 
     my $type = undef;
@@ -1194,20 +1192,13 @@ END
 
     my $counter = 0;
     if ($source) {
-        my $source_uri = URI->new($source);
-        if (defined($source_uri->scheme())){
-           $_ = $source;
-        } else {
-           my $source_uri_parts = $source_uri->path_segments();
-           $_ = $source_uri_parts->[ scalar @$source_uri_parts ];
-        }
 #        if (basename($source) ne $sfile && $sfile !~ /::/) {
            # the current source URL is not the version we're looking for
            # just take a guess - authors don't change daily
 #           $source = dirname($source) . "/$sfile";
 #        }
 #        $source =~ s,$version,$version_string,;
-        print $spec "Source$counter:         $_\n";
+        print $spec "Source$counter:         $source\n";
     }
     else {
         print $spec "Source$counter:         $sfile\n";
