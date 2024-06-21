@@ -1233,8 +1233,9 @@ for my $ofile (@args) {
     rmtree($basedir);
     my $normalized = 0;
     my $rpm_version = map_version(dist => $name, $version, \$normalized);
+    my $diff_package_version = $rpm_version ne $version;
     my $normal = 0;
-    if ($rpm_version ne $version and $rpm_version =~ m/^\d+\.\d+\./) {
+    if ($diff_package_version and $rpm_version =~ m/^\d+\.\d+\./) {
         $normal = 1;
     }
     my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
@@ -1401,7 +1402,7 @@ END
     for my $prov (@add_provides) {
         printf $spec "%-16s%s\n", "Provides:", $prov;
     }
-    if ($dlp and $normal) {
+    if ($dlp and ($normal or $diff_package_version)) {
         # only generate our own if package version is normal and there are no
         # other provided modules with different versions
         my $spec_provides = '';
