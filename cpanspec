@@ -1670,8 +1670,12 @@ END
         binmode $tfh, ':encoding(UTF-8)';
         my $cltxt = "";
 
+        my $updated_to = $version;
+        if ($rpm_version ne $version) {
+            $updated_to = "$rpm_version ($version)";
+        }
         if (-f $changelogfile) {
-            my $txt = "- updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
+            my $txt = "- updated to $updated_to\n   see $defaultdocdir/$basename/$changesfile\n\n";
             $cltxt .= $txt;
             if ($old_file && $changes) {
                 my $old_changes = extract_old_changes($old_file, $changesfile);
@@ -1693,7 +1697,7 @@ END
             }
         }
         else {
-            $cltxt .= "- initial package $version\n * created by $NAME $VERSION";
+            $cltxt .= "- initial package $updated_to\n * created by $NAME $VERSION";
         }
         $cltxt .= "\n"; # ensure line termination
         $cltxt =~ s/\n+$/\n/; # drop multi-lines at the end, osc adds one again
