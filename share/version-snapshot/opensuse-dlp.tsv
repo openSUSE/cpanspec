@@ -23040,6 +23040,7 @@ perl	5.38.0	strict	1.12
 perl	5.38.0	subs	1.04
 perl	5.38.0	Symbol	1.09
 perl	5.38.0	Sys::Hostname	1.25
+perl	5.38.0	Text::ParseWords	3.31
 perl	5.38.0	Thread	3.05
 perl	5.38.0	Tie::Array	1.07
 perl	5.38.0	Tie::ExtraHash	1.06
