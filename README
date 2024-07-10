@@ -25,3 +25,7 @@ EXAMPLE USE:
 * Call "cpan" at least once to initialize
 * call "./cpanspec -v -f WWW::Mechanize" to build
   perl-WWW-Mechanize package
+
+SEE ALSO:
+---------
+* https://github.com/openSUSE/autoupdate-perl Updating devel:languages:perl
