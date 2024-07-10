@@ -1163,8 +1163,9 @@ for my $ofile (@args) {
             $cmd = "perl Build.PL";
         }
         if ($ENV{CPANSPEC_WRAP_BUILD_COMMAND}) {
-            $cmd = $ENV{WRAP_BUILD_COMMAND} =~ s/\$COMMAND\b/$cmd/r;
+            $cmd = $ENV{CPANSPEC_WRAP_BUILD_COMMAND} =~ s/\$COMMAND\b/$cmd/r;
         }
+        verbose("Running: $cmd");
         my $out = qx{cd $basedir/$path; $cmd 2>&1};
         if ($?) {
             warn "Error when running $cmd: >>$out<<\n";
