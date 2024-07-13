@@ -696,10 +696,10 @@ sub check_dep($) {
 }
 
 sub map_version {
-    my ($type, $module, $version, $normalized) = @_;
+    my ($type, $provides, $module, $version, $normalized) = @_;
 #    warn __PACKAGE__.':'.__LINE__.": ====== map_version(@_)\n";
     if ($dlp) {
-        my $v = next_version($type, $module, $version, $normalized);
+        my $v = next_version($type, $provides, $module, $version, $normalized);
         debug_version("$type $module", $version, $v);
         $v =~ s/^v//;
         return $v;
@@ -725,7 +725,8 @@ sub read_version_snapshot {
 }
 
 sub next_version {
-    my ($type, $module, $next, $normalized) = @_;
+    my ($type, $provides, $module, $next, $normalized) = @_;
+    warn __PACKAGE__.':'.__LINE__.": ========= next_version($type, $provides, $module, $next)\n";
     my $name = $module;
     my $current = $version_snapshot->{ $type }->{ $name };
     my $nextv = version->parse($next); # version object
@@ -735,8 +736,17 @@ sub next_version {
         $normalized and $$normalized = 1;
         return $normal;
     }
+
+    my $core540 = $Module::CoreList::version{'5.040000'};
+    if (exists $core540->{ $module }) {
+        # Core perl modules are a bit more complicated, as the perl version
+        # in Leap is still at 5.26, so requiring 'CPAN > 2.360' would fail.
+        verbose "$module in core 5.40, keep format: '$next'";
+        return $next;
+    }
+
     unless (defined $current) {
-        warn "$module not found in snapshot";
+        warn "$module not found in snapshot, probably new module";
         $normalized and $$normalized = 1;
         return $normal;
     }
@@ -747,12 +757,12 @@ sub next_version {
     }
     my $currentv = version->parse($current);
 
-    # If the requested version is lower than/equal to the saved one, we just
+    # If the next version is lower than/equal to the saved one, we just
     # use the given format like we did before
     if ($nextv <= $currentv) {
         return $next;
     }
-    # requested version is higher
+    # next version is higher
     if ($current =~ m/^\d+\.\d+\./) {
         # is already proper format for rpm, e.g. 3.14.159
         $normalized and $$normalized = 1;
@@ -763,6 +773,7 @@ sub next_version {
         $normalized and $$normalized = 1;
         return $normal;
     }
+    # New::Module 1.23 > 1.22 --> 1.230.0
     # up to 3 decimals, safe to use normalized version
     if ($current =~ m/^\d+\.\d{1,3}$/) {
         $normalized and $$normalized = 1;
@@ -771,6 +782,13 @@ sub next_version {
     # four or more decimals, must keep format until major version increases
     # otherwise e.g. 1.2023 would be normalized to 1.202.3 which is lower
     if ($current =~ m/^(\d)\.(\d{4,})$/) {
+        if (not $provides) {
+            # Some::Module 5.20240609 -> 5.202.406.090
+            # In the next batch update all non core modules with >= 4 digits
+            # will be normalized, so we can already require the lower perl
+            # version
+            return $normal;
+        }
         my ($cmajor, $cminor) = ($1, $2);
         # format with the number of decimals of the saved version
         my $decimals = length $cminor;
@@ -1236,7 +1254,7 @@ for my $ofile (@args) {
 
     rmtree($basedir);
     my $normalized = 0;
-    my $rpm_version = map_version(dist => $name, $version, \$normalized);
+    my $rpm_version = map_version(dist => 0, $name, $version, \$normalized);
     my $diff_package_version = $rpm_version ne $version;
     my $normal = 0;
     if ($diff_package_version and $rpm_version =~ m/^\d+\.\d+\./) {
@@ -1373,7 +1391,7 @@ END
             }
             printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
             if ($build_requires{$dep}) {
-                $mapped //= map_version(module => $dep, $build_requires{$dep});
+                $mapped //= map_version(module => 0, $dep, $build_requires{$dep});
                 print $spec " >= $mapped";
             }
             print $spec "\n";
@@ -1393,7 +1411,7 @@ END
         }
         printf $spec "%-16s%s", "Requires:", "perl($dep)";
         if ($requires{$dep}) {
-            $mapped //= map_version(module => $dep, $requires{$dep});
+            $mapped //= map_version(module => 0, $dep, $requires{$dep});
             print $spec " >= $mapped";
         }
         print $spec "\n";
@@ -1416,7 +1434,7 @@ END
             my $version = $provides{ $package }->{version};
             my $prov = "perl($package)";
             if ($version) {
-                my $prov_rpm_version = map_version(module => $package, $version);
+                my $prov_rpm_version = map_version(module => 1, $package, $version);
                 $version =~ s/^v//;
                 $diff_version = 1 if $prov_rpm_version ne $version;
                 if ($rpm_version eq $prov_rpm_version) {
@@ -1439,7 +1457,7 @@ END
         next if ($dep eq 'perl');
         printf $spec "%-16s%s", "Recommends:", "perl($dep)";
         if ($recommends{$dep}) {
-            my $mapped = map_version(module => $dep, $recommends{$dep});
+            my $mapped = map_version(module => 0, $dep, $recommends{$dep});
             print $spec " >= $mapped";
         }
         print $spec "\n";
@@ -1829,6 +1847,7 @@ sub parse_provides {
         my $pkg = $doc->find_first('PPI::Statement::Package');
         if ($pkg) {
             my $ns = $pkg->namespace;
+            warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$ns], ['ns']);
             my $version = $pkg->version;
             unless ($version) {
                 my $prov = find_version_statements("$path/$test");
