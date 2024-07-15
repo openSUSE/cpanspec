@@ -1571,11 +1571,8 @@ END
         $cltxt .= "\n"; # ensure line termination
         $cltxt =~ s/\n+$/\n/; # drop multi-lines at the end, osc adds one again
         print $tfh $cltxt;
-	my $vc;
-        for (reverse(split(/:/, $::ENV{PATH}), '/usr/lib/build')) {
-	  $vc="$_/vc" if (-x "$_/vc");
-	}
-        die "Command `vc` not found in PATH=$::ENV{PATH}:/usr/lib/build" unless $vc;
+        my ($vc, undef) = grep { -x $_ } ('/usr/lib/build/vc', '/usr/lib/obs-build/vc');
+        die "Command `vc` not found!" unless $vc;
         system("$vc $basename.changes $tmpfile") if !$skip;
         die "$vc failed with $?" if $?;
         close($tfh);
