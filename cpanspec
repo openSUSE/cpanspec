@@ -1264,7 +1264,7 @@ for my $ofile (@args) {
 
     rmtree($basedir);
     my $normalized = 0;
-    my $rpm_version = map_version(dist => 0, $name, $version, \$normalized);
+    my $rpm_version = map_version(dist => 1, $name, $version, \$normalized);
     my $diff_package_version = $rpm_version ne $version;
     my $normal = 0;
     if ($diff_package_version and $rpm_version =~ m/^\d+\.\d+\./) {
