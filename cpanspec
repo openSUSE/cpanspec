@@ -702,6 +702,16 @@ sub map_version {
         my $v = next_version($type, $provides, $module, $version, $normalized);
         debug_version("$type $module", $version, $v);
         $v =~ s/^v//;
+        unless ($provides) {
+            if ($version !~ m/\./) {
+                # integer
+                return $version;
+            }
+            if ($v =~ m/^\d+\.[1-9]\d\d\.0$/) {
+                # 1.234.0: trim trailing zeroes
+                $v =~ s/\.0$//;
+            }
+        }
         return $v;
     }
     return $version;
@@ -741,7 +751,14 @@ sub next_version {
     if (exists $core540->{ $module }) {
         # Core perl modules are a bit more complicated, as the perl version
         # in Leap is still at 5.26, so requiring 'CPAN > 2.360' would fail.
-        verbose "$module in core 5.40, keep format: '$next'";
+        my $core = $core540->{ $module };
+        verbose "$module in core 5.40 ($core), keep format: '$next'";
+        my ($dec_core) = $core =~ m/^\d+\.(\d+)$/;
+        my ($dec) = $next =~ m/^\d+\.(\d+)$/;
+        if (length $dec > length $dec_core) {
+            $next = sprintf "%.*f", (length $dec_core), $next;
+            verbose "Shrinking version length to the one in core: $next";
+        }
         return $next;
     }
 
@@ -770,7 +787,20 @@ sub next_version {
     }
     unless ($current =~ m/\./) {
         # integer
+        unless ($provides) {
+            return $next;
+        }
         $normalized and $$normalized = 1;
+        return $normal;
+    }
+    # 3 decimals, not starting with 0
+    if ($current =~ m/^\d+\.[1-9]\d{2}$/) {
+        $normalized and $$normalized = 1;
+        if ($provides) {
+            return $normal;
+        }
+        # For Require, we leave out the .0 at the end
+        $normal =~ s/\.0$//;
         return $normal;
     }
     # New::Module 1.23 > 1.22 --> 1.230.0
