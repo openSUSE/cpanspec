@@ -747,13 +747,24 @@ sub next_version {
         return $normal;
     }
 
+    my $in_core = 0;
     my $core540 = $Module::CoreList::version{'5.040000'};
+    if ($type eq 'dist') {
+        my $guess_module = $module =~ s/-/::/gr;
+        # e.g. Module::CoreList is a dual life module with its own package
+        # in devel:languages:perl
+        if (exists $core540->{ $guess_module }) {
+            $in_core = $core540->{ $guess_module };
+        }
+    }
     if (exists $core540->{ $module }) {
+        $in_core = $core540->{ $module };
+    }
+    if ($in_core) {
         # Core perl modules are a bit more complicated, as the perl version
         # in Leap is still at 5.26, so requiring 'CPAN > 2.360' would fail.
-        my $core = $core540->{ $module };
-        verbose "$module in core 5.40 ($core), keep format: '$next'";
-        my ($dec_core) = $core =~ m/^\d+\.(\d+)$/;
+        verbose "$module in core 5.40 ($in_core), keep format: '$next'";
+        my ($dec_core) = $in_core =~ m/^\d+\.(\d+)$/;
         my ($dec) = $next =~ m/^\d+\.(\d+)$/;
         if (length $dec > length $dec_core) {
             $next = sprintf "%.*f", (length $dec_core), $next;
