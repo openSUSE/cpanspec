@@ -764,8 +764,8 @@ sub next_version {
         # Core perl modules are a bit more complicated, as the perl version
         # in Leap is still at 5.26, so requiring 'CPAN > 2.360' would fail.
         verbose "$module in core 5.40 ($in_core), keep format: '$next'";
-        my ($dec_core) = $in_core =~ m/^\d+\.(\d+)$/;
-        my ($dec) = $next =~ m/^\d+\.(\d+)$/;
+        my ($dec_core) = $in_core =~ m/^\d+\.([\d_]+)$/;
+        my ($dec) = $next =~ m/^\d+\.([\d_]+)$/;
         if (length $dec > length $dec_core) {
             $next = sprintf "%.*f", (length $dec_core), $next;
             verbose "Shrinking version length to the one in core: $next";
