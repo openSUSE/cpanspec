@@ -1745,7 +1745,9 @@ END
 
         my $updated_to = $version;
         if ($rpm_version ne $version) {
-            $updated_to = "$rpm_version ($version)";
+            if ($normalized) {
+                $updated_to = "$rpm_version ($version)";
+            }
         }
         if (-f $changelogfile) {
             my $txt = "- updated to $updated_to\n   see $defaultdocdir/$basename/$changesfile\n\n";
