@@ -1438,7 +1438,7 @@ END
             my $mapped;
             if ($config->{ignored_requires}->{$dep}) {
                 printf $spec "#";
-                $mapped = $build_requires{$dep};
+                $mapped //= map_version(module => 0, $dep, $build_requires{$dep});
             }
             printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
             if ($build_requires{$dep}) {
