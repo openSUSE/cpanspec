@@ -739,7 +739,7 @@ sub next_version {
     warn __PACKAGE__.':'.__LINE__.": ========= next_version($type, $provides, $module, $next)\n";
     my $name = $module;
     my $current = $version_snapshot->{ $type }->{ $name };
-    my $nextv = version->parse($next); # version object
+    my $nextv = eval { version->parse($next) } or return $next; # version object
     my $normal = $nextv->normal;       # normalized version string with more than one dot
     if ($next =~ m/^\d+\.\d+\./) {
         # new version is already proper format for rpm, e.g. 3.14.159
