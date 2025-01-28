@@ -335,6 +335,7 @@ GetOptions(
     'pkgdetails=s'        => \$pkgdetails,
     'debug'               => \$debug,
     'dlp'                 => \$dlp,
+    'perl-version=s'      => \my $perl_version,
 ) or pod2usage({-exitval => 1, -verbose => 0});
 
 pod2usage({-exitval => 0, -verbose => 1}) if ($help);
@@ -344,6 +345,10 @@ if ($follow and $buildrpm) {
     warn "Sorry, --follow and --build are mutually exclusive right now.\n" . "We can't build when tracking deps right now.  Ignoring --build.\n";
     $buildrpm = 0;
 }
+
+# which core modules to consider
+$perl_version ||= '5.040000';
+
 if ($dlp) {
     my $file = "version-snapshot/opensuse-dlp.tsv";
     my $tsv = "$Bin/share/$file";
@@ -800,22 +805,22 @@ sub next_version {
     }
 
     my $in_core = 0;
-    my $core540 = $Module::CoreList::version{'5.040000'};
+    my $core_modules = $Module::CoreList::version{ $perl_version };
     if ($type eq 'dist') {
         my $guess_module = $module =~ s/-/::/gr;
         # e.g. Module::CoreList is a dual life module with its own package
         # in devel:languages:perl
-        if (exists $core540->{ $guess_module }) {
-            $in_core = $core540->{ $guess_module };
+        if (exists $core_modules->{ $guess_module }) {
+            $in_core = $core_modules->{ $guess_module };
         }
     }
-    if (exists $core540->{ $module }) {
-        $in_core = $core540->{ $module };
+    if (exists $core_modules->{ $module }) {
+        $in_core = $core_modules->{ $module };
     }
     if ($in_core) {
         # Core perl modules are a bit more complicated, as the perl version
         # in Leap is still at 5.26, so requiring 'CPAN > 2.360' would fail.
-        verbose "$module in core 5.40 ($in_core), keep format: '$next'";
+        verbose "$module in core $perl_version ($in_core), keep format: '$next'";
         my ($dec_core) = $in_core =~ m/^\d+\.([\d_]+)$/;
         my ($dec) = $next =~ m/^\d+\.([\d_]+)$/;
         if (length $dec > length $dec_core) {
