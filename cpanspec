@@ -821,6 +821,10 @@ for my $r (split(/ /, $config->{ignore_requires} || '')) {
   $config->{ignored_requires}->{$r} = 1;
 }
 my @args      = @ARGV;
+
+main() unless caller(); # allow unit testing
+
+sub main {
 my @processed = ();
 local $Data::Dumper::Sortkeys = 1;
 
@@ -1214,14 +1218,11 @@ END
     if ($config_file) {
         print $spec "Source$counter:     $config_file\n";
     }
-    if ($config->{patches}) {
-        $counter = 0;
-        for my $p (sort keys %{$config->{patches}}) {
-            my $args = $config->{patches}->{$p} || '';
-            print $spec "# $1\n" if $args =~ / ?(PATCH-FIX.*)/;
-            print $spec "Patch$counter:   $p\n";
-            $counter++;
-        }
+
+    my $patches = process_patches($config);
+
+    for my $source (@{ $patches->{sources} }) {
+        print $spec "$source\n";
     }
 
     if ($config->{skip_noarch}) {
@@ -1330,23 +1331,8 @@ $description
 \%prep
 END
 
-    my $all_patch_args_same = 1;
-    my $common_patch_args = undef;
-    if ($config->{patches}) {
-        for my $p (sort keys %{$config->{patches}}) {
-            my $args = $config->{patches}->{$p} || undef;
-            $args =~ s/ ?PATCH-FIX.*// if defined($args);
-            if (!defined($common_patch_args) && defined($args)) {
-                $common_patch_args = $args;
-            }
-            $all_patch_args_same = ($args // '') eq ($common_patch_args // '');
-            last if !$all_patch_args_same;
-        }
-    }
-
-    my $autosetup_arg = (!$config->{patches} || $all_patch_args_same) ? (defined($common_patch_args) ? " $common_patch_args" : "") : " -N";
-        print $spec <<END;
-\%autosetup @{[($noprefix ? "" : " -n $buildpath")]}$autosetup_arg
+    print $spec <<END;
+\%autosetup @{[($noprefix ? "" : " -n $buildpath")]} $patches->{autosetup_args}
 
 END
 
@@ -1354,19 +1340,8 @@ END
         print $spec qq{find . -type f ! -path "*/t/*" ! -name "*.pl" ! -path "*/bin/*" ! -path "*/script/*" ! -path "*/scripts/*" ! -name "configure" -print0 | xargs -0 chmod 644\n};
     }
 
-    if ($config->{patches} && !$all_patch_args_same) {
-        my $counter = 0;
-        for my $p (sort keys %{$config->{patches}}) {
-
-            my $args = $config->{patches}->{$p} || undef;
-            if (defined($args)) {
-                $args =~ s/ ?PATCH-FIX.*//;
-                print $spec "%patch -P$counter $args\n";
-            } else {
-                print $spec "%patch -P$counter\n";
-            }
-            $counter++;
-        }
+    for my $patch (@{ $patches->{patches} }) {
+        print $spec "$patch\n";
     }
 
     if (@filter_requires) {
@@ -1583,6 +1558,45 @@ END
         die "osc vc failed with $?" if $?;
         close($tfh);
     }
+}
+}
+
+sub process_patches {
+    my ($config) = @_;
+    my @patches;
+    my @patch_sources;
+    my $all_patch_args_same = 1;
+    my %spec = (autosetup_args => '-p1', patches => \@patches, sources => \@patch_sources);
+    return \%spec unless $config->{patches};
+
+    for my $patch (sort keys %{ $config->{patches} }) {
+        my $args = $config->{patches}->{ $patch } // '';
+        $args =~ s/ ?PATCH-FIX.*//;
+        if ($args ne '-p1') {
+            $spec{autosetup_args} = '-N';
+            $all_patch_args_same = 0;
+            last;
+        }
+    }
+
+    my $counter = 0;
+    for my $patch (sort keys %{ $config->{patches} }) {
+        my $args = $config->{patches}->{ $patch } // '';
+        if ($args =~ s/ ?(PATCH-FIX.*)//) {
+            push @patch_sources, "# $1";
+        }
+        push @patch_sources, "Patch$counter:   $patch";
+        next if $all_patch_args_same;
+
+        if (length $args) {
+            push @patches, "%patch -P$counter $args";
+        }
+        else {
+            push @patches, "%patch -P$counter";
+        }
+        $counter++;
+    }
+    return \%spec;
 }
 
 sub prereqs_from_metayaml {
