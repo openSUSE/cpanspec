@@ -1233,7 +1233,8 @@ END
         printf $spec "%-16s%s\n", "BuildArch:", "noarch" if $noarch;
     }
 
-    printf $spec "%-16s%s\n", "BuildRequires:", "(perl-macros-suse or perl-macros)";
+    printf $spec "%-16s%s\n", "BuildRequires:", "perl";
+    printf $spec "%-16s%s\n", "BuildRequires:", "perl-macros";
 
     for my $dep (keys(%requires)) {
         next if ($dep eq 'perl');
