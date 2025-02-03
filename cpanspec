@@ -1174,6 +1174,7 @@ for my $ofile (@args) {
     my $dynamic = 1;
     my $got_prereqs = 0;
     my $metaversion;
+    my %no_index;
 
     if (-e "$basedir/$path/META.json") {
         my $results = read_meta_json("$basedir/$path/META.json", \%stats);
@@ -1211,6 +1212,9 @@ for my $ofile (@args) {
         $license = $results->{license};
         if ($results->{version}) {
             $metaversion = $results->{version};
+        }
+        if ($results->{no_index}) {
+            %no_index = %{ $results->{no_index} };
         }
     }
     if (defined $metaversion) {
@@ -1301,7 +1305,7 @@ for my $ofile (@args) {
     dump_statistics($module, $version, \%stats);
     unless (%provides) {
         verbose("No 'provides' info in meta, parsing code.\n");
-        %provides = parse_provides($basedir . $path, \@files);
+        %provides = parse_provides($basedir . $path, \@files, \%no_index);
     }
 
     delete @build_requires{ keys %provides };
@@ -1895,10 +1899,23 @@ sub prereqs_from_metajson {
 }
 
 sub parse_provides {
-    my ($path, $files) = @_;
+    my ($path, $files, $no_index) = @_;
     my %provides;
-    foreach my $test (grep /\.(pm|t|PL|pl)/, @$files) {
-        next unless $test =~ m{^(([^/]+\.pm)|(lib/.*\.pm$))};
+    TEST: foreach my $test (grep /\.(pm|t|PL|pl)/, @$files) {
+        next unless $test =~ m{\.pm$};
+        if (keys %$no_index) {
+            # If a module provides a list of things to not index, we can
+            # index everything else.
+            # https://metacpan.org/pod/CPAN::Meta::Spec#no_index
+            if (my $dirs = $no_index->{directory}) {
+                for my $dir (@$dirs) {
+                    next TEST if $test =~ m/^\Q$dir/;
+                }
+            }
+        }
+        else {
+            next unless $test =~ m{^(([^/]+\.pm)|(lib/.*\.pm$))};
+        }
         my $doc = PPI::Document->new("$path/$test");
 
         next unless ($doc);
@@ -2083,6 +2100,8 @@ sub read_meta_yaml {
     }
     $results{license} = $license;
     $results{version} = $meta->{version};
+    $results{no_index} = $meta->{no_index};
+    $stats->{no_index} = $meta->{no_index};
     return \%results;
 }
 
