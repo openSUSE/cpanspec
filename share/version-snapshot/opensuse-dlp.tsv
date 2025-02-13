@@ -17,8 +17,6 @@ Class-DBI-Sweet	0.11	Class::DBI::Sweet	0.11
 Class-DBI-Sweet	0.11	Class::DBI::Sweet::SQL::Abstract	0
 Class-Discover	1.000003	Class::Discover	1.000003
 Class-Inner	0.200001	Class::Inner	0.200001
-CommonMark	0.290000	CommonMark	0.290000
-CommonMark	0.290000	CommonMark::Node	0.290000
 Config-Identity	0.0019	Config::Identity	0.0019
 Config-Identity	0.0019	Config::Identity::GitHub	0.0019
 Config-Identity	0.0019	Config::Identity::PAUSE	0.0019
