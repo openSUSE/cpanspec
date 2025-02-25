@@ -1190,9 +1190,9 @@ Url:            $url
 END
     my $sfile = basename($ofile);
     $sfile =~ s/$name/\%{cpan_name}/;
-    $sfile =~ s/$version/%{version}/;
+    $sfile =~ s/$version/$version_string/;
     $source =~ s/$name/\%{cpan_name}/;
-    $source =~ s/$version/%{version}/;
+    $source =~ s/$version/$version_string/;
 
     my $counter = 0;
     if ($source) {
