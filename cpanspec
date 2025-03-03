@@ -1162,7 +1162,7 @@ END
 %define cpan_name $name
 Name:           $prefix$name
 Version:        $rpm_version
-Release:        $release
+Release:        $release%{?autorelease}
 END
 
     if ($rpm_version ne $version) {
