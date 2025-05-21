@@ -1821,7 +1821,7 @@ sub process_patches {
             push @patch_sources, "# $1";
         }
         push @patch_sources, "Patch$counter:   $patch";
-        next if $all_patch_args_same;
+        $counter++, next if $all_patch_args_same;
 
         if (length $args) {
             push @patches, "%patch -P$counter $args";
