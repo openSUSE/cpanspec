@@ -1560,7 +1560,7 @@ $description
 END
 
     print $spec <<END;
-\%autosetup @{[($noprefix ? "" : " -n $buildpath")]} $patches->{autosetup_args}
+\%autosetup @{[($noprefix ? "" : "-n $buildpath")]} $patches->{autosetup_args}
 
 END
 
