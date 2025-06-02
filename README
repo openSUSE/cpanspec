@@ -13,7 +13,6 @@ Requires:
 * perl(Module::Build)
 * perl(Module::Build::Tiny)
 * perl(Parse::CPAN::Packages)
-* perl(Perl::PrereqScanner)
 * perl(Pod::POM)
 * perl(Text::Autoformat)
 * perl(YAML::XS)
