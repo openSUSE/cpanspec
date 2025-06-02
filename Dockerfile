@@ -16,7 +16,6 @@ RUN zypper refresh \
         perl-Pod-POM \
         perl-libwww-perl \
         perl-Class-Accessor-Chained \
-        perl-Perl-PrereqScanner \
         perl-Algorithm-Diff \
         perl-Module-Build-Tiny \
         perl-ExtUtils-Depends \
