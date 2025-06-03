@@ -22,7 +22,6 @@ requires:
   POSIX: 0
   PPI::Document: 0
   Parse::CPAN::Packages: 0
-  Perl::PrereqScanner: 0
   Pod::POM: 0
   Pod::POM::View::Text: 0
   Pod::Simple::TextContent: 0
