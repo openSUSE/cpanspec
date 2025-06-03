@@ -43,6 +43,7 @@ cpanspec [options] [file [...]]
    --add-buildrequires  Add BuildRequires for this item
    --old-file=s         Old archive file for extraction of changelog difference
    --skip-changes       Do not create or update .changes file
+   --generate-changes   Create or update .changes file
    --version            Print the version number and exit
 
 =head1 DESCRIPTION
@@ -760,7 +761,7 @@ sub is_license_file {
 # if using another locale. Also ensures writing out UTF8. (Thanks to
 # Roy-Magne Mo for pointing out the problem and providing a solution.)
 setlocale(LC_ALL, "en_US.UTF-8");
-
+my $generate_changes = 0;
 GetOptions(
     'help|h'              => \$help,
     'old|o'               => \$compat,
@@ -782,13 +783,18 @@ GetOptions(
     'add-provides=s'      => \@add_provides,
     'add-buildrequires=s' => \@add_buildrequires,
     'skip-changes'        => \$skip_changes,
+    'generate-changes'    => \$generate_changes,
     'old-file=s'          => \$old_file,
     'config=s'            => \$config_file,
     'version'             => \&print_version,
     'prefer-macros|m'     => \$macros,
     'pkgdetails=s'        => \$pkgdetails,
     'debug'               => \$debug,
-) or pod2usage({-exitval => 1, -verbose => 0});
+) or pod2usage({-exitval => 1, -verbose => 0}); 
+
+if (!$skip_changes){
+    $skip_changes = !$generate_changes;
+}
 
 pod2usage({-exitval => 0, -verbose => 1}) if ($help);
 pod2usage({-exitval => 1, -verbose => 0}) if (!@ARGV);
@@ -1156,7 +1162,7 @@ END
 %define cpan_name $name
 Name:           $prefix$name
 Version:        $rpm_version
-Release:        $release
+Release:        $release%{?autorelease}
 END
 
     if ($rpm_version ne $version) {
@@ -1184,20 +1190,22 @@ Url:            $url
 END
     my $sfile = basename($ofile);
     $sfile =~ s/$name/\%{cpan_name}/;
-    $source =~ s/$name/\%{cpan_name}/ if $download;
+    $sfile =~ s/$version/$version_string/;
+    $source =~ s/$name/\%{cpan_name}/;
+    $source =~ s/$version/$version_string/;
 
     my $counter = 0;
     if ($source) {
-        if (basename($source) ne $sfile && $sfile !~ /::/) {
+#        if (basename($source) ne $sfile && $sfile !~ /::/) {
            # the current source URL is not the version we're looking for
            # just take a guess - authors don't change daily
-           $source = dirname($source) . "/$sfile";
-        }
-        $source =~ s,$version,$version_string,;
+#           $source = dirname($source) . "/$sfile";
+#        }
+#        $source =~ s,$version,$version_string,;
         print $spec "Source$counter:         $source\n";
     }
     else {
-        print $spec "Source$counter:         $ofile\n";
+        print $spec "Source$counter:         $sfile\n";
     }
     $counter++;
 
@@ -1309,7 +1317,7 @@ Source99:       $name-filter-provides.sh
 END
     }
 
-    print $spec "%{perl_requires}\n";
+    print $spec "%{?perl_requires}\n";
     add_custom_spec_section($spec, "preamble");
 
     my $buildpath = $path;
