@@ -982,6 +982,10 @@ $config->{ignored_requires} = {};
 for my $r (split(/ /, $config->{ignore_requires} || '')) {
   $config->{ignored_requires}->{$r} = 1;
 }
+$config->{ignored_provides} = {};
+for my $p (split(/ /, $config->{ignore_provides} || '')) {
+  $config->{ignored_provides}->{$p} = 1;
+}
 my @args      = @ARGV;
 
 main() unless caller(); # allow unit testing
@@ -1494,6 +1498,10 @@ END
         my $diff_version = 0;
 
         for my $package (sort keys %provides) {
+            my $line = '';
+            if ($config->{ignored_provides}->{$package}) {
+                $line .= "#";
+            }
             my $version = $provides{ $package }->{version};
             my $prov = "perl($package)";
             if ($version) {
@@ -1507,7 +1515,7 @@ END
                     $prov .= " = $prov_rpm_version";
                 }
             }
-            my $line = sprintf "%-16s%s\n", "Provides:", $prov;
+            $line .= sprintf "%-16s%s\n", "Provides:", $prov;
             $spec_provides .= $line;
         }
         if ($diff_version) {
