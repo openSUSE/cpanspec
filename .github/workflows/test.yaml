@@ -18,7 +18,7 @@ jobs:
         zypper -n install perl-App-cpanminus make gcc
 
         cpanm -n Archive::Zip Pod::POM Parse::CPAN::Packages
-        Text::Autoformat YAML::XS LWP::UserAgent Perl::PrereqScanner
+        Text::Autoformat YAML::XS LWP::UserAgent
         Algorithm::Diff
     - name: test
       run: perl -c cpanspec
@@ -31,7 +31,7 @@ jobs:
         sudo apt-get install cpanminus
 
         sudo cpanm -n Archive::Zip Pod::POM Parse::CPAN::Packages
-        Text::Autoformat YAML::XS LWP::UserAgent Perl::PrereqScanner
+        Text::Autoformat YAML::XS LWP::UserAgent
         Algorithm::Diff
     - name: test
       run: perl -c cpanspec

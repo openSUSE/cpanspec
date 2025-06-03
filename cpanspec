@@ -219,7 +219,6 @@ use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(rmtree);
-use Perl::PrereqScanner;
 use Encode qw/ decode_utf8 /;
 use Encode::Guess;
 use JSON::PP ();
@@ -1659,7 +1658,6 @@ sub prereqs_from_metajson {
 sub parse_provides {
     my ($path, $files) = @_;
     my %provides;
-    my $scanner = Perl::PrereqScanner->new;
     foreach my $test (grep /\.(pm|t|PL|pl)/, @$files) {
         my $doc = PPI::Document->new($path . "/" . $test);
 
