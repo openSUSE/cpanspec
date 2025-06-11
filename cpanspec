@@ -1003,23 +1003,27 @@ for my $ofile (@args) {
     my $license;
     ($content, $description, $author) = (undef, undef, undef);
 
-    if ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
+    my $v = '';
+    if ($ofile =~ /^(?:.*\/)?(.+)-(?:(v)\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $file    = $ofile;
         $name    = $1;
-        $version = $2;
-        $type    = $3;
+        $v       = $2;
+        $version = $3;
+        $type    = $4;
     }
-    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.tgz$/i) {
+    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:(v)\.?)?([^-]+)\.tgz$/i) {
         $file    = $ofile;
         $name    = $1;
-        $version = $2;
+        $v       = $2;
+        $version = $3;
         $type    = 'tar';
     }
-    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(zip)$/i) {
+    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:(v)\.?)?([^-]+)\.(zip)$/i) {
         $file    = $ofile;
         $name    = $1;
-        $version = $2;
-        $type    = $3;
+        $v       = $2;
+        $version = $3;
+        $type    = $4;
     }
     else {
         # keep things happy if we get "Foo-Bar" instead of "Foo::Bar"
@@ -1029,6 +1033,7 @@ for my $ofile (@args) {
         ($file, $name, $version, $type) = get_file($ofile);
         $download = 1;
     }
+    $version = $v . $version if defined $v;
     next unless $name;
 
     my $module = $name;
@@ -1221,9 +1226,6 @@ for my $ofile (@args) {
             %no_index = %{ $results->{no_index} };
         }
     }
-    if (defined $metaversion) {
-        $version = $metaversion;
-    }
     $stats{dynamic} = $dynamic;
     $debug and warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$dynamic], ['dynamic']);
 
@@ -1320,7 +1322,7 @@ for my $ofile (@args) {
 
     rmtree($basedir);
     my $normalized = 0;
-    $version =~ s/^v//;
+    $version =~ s/^v// unless $dlp;
     my $rpm_version = map_version(dist => 1, $name, $version, \$normalized);
     my $diff_package_version = $rpm_version ne $version;
     my $normal = 0;
