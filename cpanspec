@@ -798,6 +798,10 @@ sub next_version {
     my $current = $version_snapshot->{ $type }->{ $name };
     my $nextv = eval { version->parse($next) } or return $next; # version object
     my $normal = $nextv->normal;       # normalized version string with more than one dot
+    if (not $provides) {
+        # For Require, we leave out the .0 at the end
+        $normal =~ s/\.0$//;
+    }
     if ($next =~ m/^\d+\.\d+\./) {
         # new version is already proper format for rpm, e.g. 3.14.159
         $normalized and $$normalized = 1;
@@ -841,6 +845,10 @@ sub next_version {
         return $normal;
     }
     my $currentv = version->parse($current);
+    if (not $provides) {
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
 
     # If the next version is lower than/equal to the saved one, we just
     # use the given format like we did before
@@ -855,18 +863,12 @@ sub next_version {
     }
     unless ($current =~ m/\./) {
         # integer
-        unless ($provides) {
-            return $next;
-        }
         $normalized and $$normalized = 1;
         return $normal;
     }
     # 3 decimals, not starting with 0
     if ($current =~ m/^\d+\.[1-9]\d{2}$/) {
         $normalized and $$normalized = 1;
-        if ($provides) {
-            return $normal;
-        }
         # For Require, we leave out the .0 at the end
         $normal =~ s/\.0$//;
         return $normal;
@@ -880,13 +882,6 @@ sub next_version {
     # four or more decimals, must keep format until major version increases
     # otherwise e.g. 1.2023 would be normalized to 1.202.3 which is lower
     if ($current =~ m/^(\d)\.(\d{4,})$/) {
-        if (not $provides) {
-            # Some::Module 5.20240609 -> 5.202.406.090
-            # In the next batch update all non core modules with >= 4 digits
-            # will be normalized, so we can already require the lower perl
-            # version
-            return $normal;
-        }
         my ($cmajor, $cminor) = ($1, $2);
         # format with the number of decimals of the saved version
         my $decimals = length $cminor;
