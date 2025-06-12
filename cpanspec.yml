@@ -34,3 +34,4 @@
 #anything else to be added to spec file
 #follows directly after %files section, so it can contain new blocks or also
 #changes to %files section
+#epoch: number

@@ -1360,6 +1360,11 @@ Name:           $prefix$name
 Version:        $rpm_version
 Release:        $release
 END
+    if (defined $config->{epoch}) {
+        print $spec <<"END";
+Epoch:          $config->{epoch}
+END
+    }
 
     if ($rpm_version ne $version) {
         if ($normalized) {
