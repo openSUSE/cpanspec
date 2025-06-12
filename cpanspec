@@ -190,7 +190,7 @@ use warnings;
 use 5.010;
 
 our $NAME    = "cpanspec";
-our $VERSION = '1.84.00';
+our $VERSION = '1.84.01';
 my $script = __FILE__;
 
 use Cwd;
@@ -210,6 +210,7 @@ use POSIX;
 use locale;
 use Text::Autoformat;
 use YAML::XS ();
+use CPAN::Meta::YAML;
 use Getopt::Long;
 use Pod::POM;
 use PodViewSpec;
@@ -219,11 +220,13 @@ use LWP::UserAgent;
 use Parse::CPAN::Packages;
 use File::Temp;
 use File::Path qw(rmtree);
+use Encode qw/ encode_utf8 decode_utf8 /;
 use Encode qw/ decode_utf8 /;
 use Encode::Guess;
 use JSON::PP ();
 use Data::Dumper;
 use Algorithm::Diff;
+use FindBin '$Bin';
 
 require Carp;
 
@@ -257,6 +260,8 @@ our $old_file;
 our $config = {};
 our $cpan = $ENV{'CPAN'} || 'https://cpan.metacpan.org';
 my $debug;
+my $dlp;
+my $version_snapshot;
 
 our $home = $ENV{'HOME'} || (getpwuid($<))[7];
 die "Can't locate home directory.  Please define \$HOME.\n"
@@ -296,6 +301,63 @@ my @MACROS = (
 
 # this is set after the parameters are passed
 our %macro;
+
+# Set locale to en_US.UTF8 so that dates in changelog will be correct
+# if using another locale. Also ensures writing out UTF8. (Thanks to
+# Roy-Magne Mo for pointing out the problem and providing a solution.)
+setlocale(LC_ALL, "en_US.UTF-8");
+
+GetOptions(
+    'help|h'              => \$help,
+    'old|o'               => \$compat,
+    'license|l'           => \$addlicense,
+    'noprefix|n'          => \$noprefix,
+    'force|f'             => \$force,
+    'packager|p=s'        => \$packager,
+    'release|r=i'         => \$release,
+    'epoch|e=i'           => \$epoch,
+    'disttag|d=s'         => \$disttag,
+    'srpm|s'              => \$buildsrpm,
+    'build|b'             => \$buildrpm,
+    'cpan|c=s'            => \$cpan,
+    'verbose|v'           => \$verbose,
+    'follow'              => \$follow,
+    'filter-requires=s'   => \@filter_requires,
+    'filter-provides=s'   => \@filter_provides,
+    'add-requires=s'      => \@add_requires,
+    'add-provides=s'      => \@add_provides,
+    'add-buildrequires=s' => \@add_buildrequires,
+    'skip-changes'        => \$skip_changes,
+    'old-file=s'          => \$old_file,
+    'config=s'            => \$config_file,
+    'version'             => \&print_version,
+    'prefer-macros|m'     => \$macros,
+    'pkgdetails=s'        => \$pkgdetails,
+    'debug'               => \$debug,
+    'dlp'                 => \$dlp,
+    'perl-version=s'      => \my $perl_version,
+) or pod2usage({-exitval => 1, -verbose => 0});
+
+pod2usage({-exitval => 0, -verbose => 1}) if ($help);
+pod2usage({-exitval => 1, -verbose => 0}) if (!@ARGV);
+
+if ($follow and $buildrpm) {
+    warn "Sorry, --follow and --build are mutually exclusive right now.\n" . "We can't build when tracking deps right now.  Ignoring --build.\n";
+    $buildrpm = 0;
+}
+
+# which core modules to consider
+$perl_version ||= '5.040000';
+
+if ($dlp) {
+    my $file = "version-snapshot/opensuse-dlp.tsv";
+    my $tsv = "$Bin/share/$file";
+    unless (-e $tsv) {
+        $tsv = "/usr/share/cpanspec/$file";
+    }
+    $version_snapshot = read_version_snapshot($tsv);
+}
+
 
 sub print_version {
     print "$NAME version $VERSION\n";
@@ -379,11 +441,7 @@ sub update_packages() {
     $updated = 1;
 }
 
-sub get_file($) {
-    my $ofile = shift;
-    my ($file, $name, $version, $type);
-    # Look up $ofile in 02packages.details.txt.
-    verbose("Get file $ofile");
+sub read_packages {
     update_packages();
     if (!defined($packages)) {
         verbose "parsing packages";
@@ -391,6 +449,14 @@ sub get_file($) {
         verbose "done";
     }
     die "Parse::CPAN::Packages->new() failed: $!\n" unless defined $packages;
+}
+
+sub get_file($) {
+    my $ofile = shift;
+    my ($file, $name, $version, $type);
+    # Look up $ofile in 02packages.details.txt.
+    verbose("Get file $ofile");
+    read_packages();
     my ($m, $d);
     if ($m = $packages->package($ofile) and $d = $m->distribution()) {
         $source = $cpan . "/authors/id/" . $d->prefix();
@@ -516,6 +582,7 @@ sub get_content(%) {
 
 sub get_description {
     my $cont   = shift;
+    return unless defined $cont;
     my $title  = shift || 'DESCRIPTION';
     my $parser = Pod::POM->new;
 
@@ -685,15 +752,150 @@ sub check_dep($) {
     return (check_rpm("perl($module)") || check_repo("perl($module)"));
 }
 
-sub map_version($$) {
-    my ($module, $version) = @_;
-    if (grep { $module eq $_ } qw/Module::Build CPAN::Meta::Requirements ExtUtils::PkgConfig Test::Exception Test::Number::Delta Time::Duration DateTime::Locale File::Path/ ) {
-	my $nv = $version . "000000";
-	if ($nv =~ /^(.*\.[0-9]{6})/) {
-	    return $1;
-	}
+sub map_version {
+    my ($type, $provides, $module, $version, $normalized) = @_;
+#    warn __PACKAGE__.':'.__LINE__.": ====== map_version(@_)\n";
+    if ($dlp) {
+        my $v = next_version($type, $provides, $module, $version, $normalized);
+        debug_version("$type $module", $version, $v);
+        $v =~ s/^v//;
+        unless ($provides) {
+            if ($version !~ m/\./) {
+                # integer
+                return $version;
+            }
+            if ($v =~ m/^\d+\.[1-9]\d*\.0$/) {
+                # 1.234.0: trim trailing zeroes
+                $v =~ s/\.0$//;
+            }
+        }
+        return $v;
     }
     return $version;
+}
+
+sub read_version_snapshot {
+    my ($tsv) = @_;
+    my %modules;
+    my %dist;
+    open my $fh, '<', $tsv or die $!;
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($dist, $distv, $module, $version) = split m/\t/, $line;
+        # modules without their own version get the distribution version
+        $version = $distv if $version eq 'undef';
+        $modules{ $module } = $version;
+        $dist{ $dist } = $distv;
+    }
+    close $fh;
+    return { module => \%modules, dist => \%dist };
+}
+
+sub next_version {
+    my ($type, $provides, $module, $next, $normalized) = @_;
+    warn __PACKAGE__.':'.__LINE__.": ========= next_version($type, $provides, $module, $next)\n";
+    my $name = $module;
+    my $current = $version_snapshot->{ $type }->{ $name };
+    my $nextv = eval { version->parse($next) } or return $next; # version object
+    my $normal = $nextv->normal;       # normalized version string with more than one dot
+    if (not $provides) {
+        # For Require, we leave out the .0 at the end
+        $normal =~ s/\.0$//;
+    }
+    if ($next =~ m/^\d+\.\d+\./) {
+        # new version is already proper format for rpm, e.g. 3.14.159
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+
+    my $in_core = 0;
+    my $core_modules = $Module::CoreList::version{ $perl_version };
+    if ($type eq 'dist') {
+        my $guess_module = $module =~ s/-/::/gr;
+        # e.g. Module::CoreList is a dual life module with its own package
+        # in devel:languages:perl
+        if (exists $core_modules->{ $guess_module }) {
+            $in_core = $core_modules->{ $guess_module };
+        }
+    }
+    if (exists $core_modules->{ $module }) {
+        $in_core = $core_modules->{ $module };
+    }
+    if ($in_core) {
+        # Core perl modules are a bit more complicated, as the perl version
+        # in Leap is still at 5.26, so requiring 'CPAN > 2.360' would fail.
+        verbose "$module in core $perl_version ($in_core), keep format: '$next'";
+        my ($dec_core) = $in_core =~ m/^\d+\.([\d_]+)$/;
+        my ($dec) = $next =~ m/^\d+\.([\d_]+)$/;
+        if (length $dec > length $dec_core) {
+            $next = sprintf "%.*f", (length $dec_core), $next;
+            verbose "Shrinking version length to the one in core: $next";
+        }
+        return $next;
+    }
+
+    unless (defined $current) {
+        warn "$module not found in snapshot, probably new module";
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+    $current =~ s/^v//;
+    unless ($current) {
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+    my $currentv = version->parse($current);
+    if (not $provides) {
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+
+    # If the next version is lower than/equal to the saved one, we just
+    # use the given format like we did before
+    if ($nextv <= $currentv) {
+        return $next;
+    }
+    # next version is higher
+    if ($current =~ m/^\d+\.\d+\./) {
+        # is already proper format for rpm, e.g. 3.14.159
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+    unless ($current =~ m/\./) {
+        # integer
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+    # 3 decimals, not starting with 0
+    if ($current =~ m/^\d+\.[1-9]\d{2}$/) {
+        $normalized and $$normalized = 1;
+        # For Require, we leave out the .0 at the end
+        $normal =~ s/\.0$//;
+        return $normal;
+    }
+    # New::Module 1.23 > 1.22 --> 1.230.0
+    # up to 3 decimals, safe to use normalized version
+    if ($current =~ m/^\d+\.\d{1,3}$/) {
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+    # four or more decimals, must keep format until major version increases
+    # otherwise e.g. 1.2023 would be normalized to 1.202.3 which is lower
+    if ($current =~ m/^(\d)\.(\d{4,})$/) {
+        my ($cmajor, $cminor) = ($1, $2);
+        # format with the number of decimals of the saved version
+        my $decimals = length $cminor;
+        my ($nmajor, $nminor) = split m/\./, $next;
+        if (defined $nminor) {
+            $next = sprintf "%.*f", $decimals, $next;
+        }
+        if ($next =~ m/^$cmajor(?:\.|$)/) {
+            return $next;
+        }
+        $normalized and $$normalized = 1;
+        return $normal;
+    }
+    die "Unexpected version for $module: '$next' ($current)";
 }
 
 sub extract_old_changes($$) {
@@ -756,46 +958,8 @@ sub is_license_file {
     return;
 }
 
-# Set locale to en_US.UTF8 so that dates in changelog will be correct
-# if using another locale. Also ensures writing out UTF8. (Thanks to
-# Roy-Magne Mo for pointing out the problem and providing a solution.)
-setlocale(LC_ALL, "en_US.UTF-8");
-
-GetOptions(
-    'help|h'              => \$help,
-    'old|o'               => \$compat,
-    'license|l'           => \$addlicense,
-    'noprefix|n'          => \$noprefix,
-    'force|f'             => \$force,
-    'packager|p=s'        => \$packager,
-    'release|r=i'         => \$release,
-    'epoch|e=i'           => \$epoch,
-    'disttag|d=s'         => \$disttag,
-    'srpm|s'              => \$buildsrpm,
-    'build|b'             => \$buildrpm,
-    'cpan|c=s'            => \$cpan,
-    'verbose|v'           => \$verbose,
-    'follow'              => \$follow,
-    'filter-requires=s'   => \@filter_requires,
-    'filter-provides=s'   => \@filter_provides,
-    'add-requires=s'      => \@add_requires,
-    'add-provides=s'      => \@add_provides,
-    'add-buildrequires=s' => \@add_buildrequires,
-    'skip-changes'        => \$skip_changes,
-    'old-file=s'          => \$old_file,
-    'config=s'            => \$config_file,
-    'version'             => \&print_version,
-    'prefer-macros|m'     => \$macros,
-    'pkgdetails=s'        => \$pkgdetails,
-    'debug'               => \$debug,
-) or pod2usage({-exitval => 1, -verbose => 0});
-
-pod2usage({-exitval => 0, -verbose => 1}) if ($help);
-pod2usage({-exitval => 1, -verbose => 0}) if (!@ARGV);
-
-if ($follow and $buildrpm) {
-    warn "Sorry, --follow and --build are mutually exclusive right now.\n" . "We can't build when tracking deps right now.  Ignoring --build.\n";
-    $buildrpm = 0;
+sub debug_version {
+    warn sprintf "%-50s  %10s --> %10s\n", @_;
 }
 
 %macro = %{$MACROS[$macros]};
@@ -812,6 +976,10 @@ $config = YAML::XS::LoadFile($config_file) if $config_file;
 $config->{ignored_requires} = {};
 for my $r (split(/ /, $config->{ignore_requires} || '')) {
   $config->{ignored_requires}->{$r} = 1;
+}
+$config->{ignored_provides} = {};
+for my $p (split(/ /, $config->{ignore_provides} || '')) {
+  $config->{ignored_provides}->{$p} = 1;
 }
 my @args      = @ARGV;
 
@@ -830,23 +998,27 @@ for my $ofile (@args) {
     my $license;
     ($content, $description, $author) = (undef, undef, undef);
 
-    if ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
+    my $v = '';
+    if ($ofile =~ /^(?:.*\/)?(.+)-(?:(v)\.?)?([^-]+)\.(tar)\.(?:gz|bz2)$/i) {
         $file    = $ofile;
         $name    = $1;
-        $version = $2;
-        $type    = $3;
+        $v       = $2;
+        $version = $3;
+        $type    = $4;
     }
-    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.tgz$/i) {
+    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:(v)\.?)?([^-]+)\.tgz$/i) {
         $file    = $ofile;
         $name    = $1;
-        $version = $2;
+        $v       = $2;
+        $version = $3;
         $type    = 'tar';
     }
-    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:v\.?)?([^-]+)\.(zip)$/i) {
+    elsif ($ofile =~ /^(?:.*\/)?(.+)-(?:(v)\.?)?([^-]+)\.(zip)$/i) {
         $file    = $ofile;
         $name    = $1;
-        $version = $2;
-        $type    = $3;
+        $v       = $2;
+        $version = $3;
+        $type    = $4;
     }
     else {
         # keep things happy if we get "Foo-Bar" instead of "Foo::Bar"
@@ -856,6 +1028,7 @@ for my $ofile (@args) {
         ($file, $name, $version, $type) = get_file($ofile);
         $download = 1;
     }
+    $version = $v . $version if defined $v;
     next unless $name;
 
     my $module = $name;
@@ -1004,6 +1177,8 @@ for my $ofile (@args) {
     my (%build_requires, %requires, %recommends, %provides);
     my $dynamic = 1;
     my $got_prereqs = 0;
+    my $metaversion;
+    my %no_index;
 
     if (-e "$basedir/$path/META.json") {
         my $results = read_meta_json("$basedir/$path/META.json", \%stats);
@@ -1019,6 +1194,9 @@ for my $ofile (@args) {
             @provides{ keys %$prov } = values %$prov;
         }
         $got_prereqs = $results->{got_prereqs};
+        if ($results->{version}) {
+            $metaversion = $results->{version};
+        }
     }
 
     if (-e "$basedir/$path/META.yml") {
@@ -1036,6 +1214,12 @@ for my $ofile (@args) {
         $got_prereqs = $results->{got_prereqs};
         $scripts = $results->{scripts};
         $license = $results->{license};
+        if ($results->{version}) {
+            $metaversion = $results->{version};
+        }
+        if ($results->{no_index}) {
+            %no_index = %{ $results->{no_index} };
+        }
     }
     $stats{dynamic} = $dynamic;
     $debug and warn __PACKAGE__.':'.__LINE__.$".Data::Dumper->Dump([\$dynamic], ['dynamic']);
@@ -1043,6 +1227,7 @@ for my $ofile (@args) {
     my $usebuildpl  = 0;
     if (grep /^Build\.PL$/, @files) {
         $usebuildpl = 1;
+        $build_requires{'Module::Build'} ||= 0;
     }
     else {
         $build_requires{'ExtUtils::MakeMaker'} ||= 0;
@@ -1058,6 +1243,10 @@ for my $ofile (@args) {
         if ($usebuildpl) {
             $cmd = "perl Build.PL";
         }
+        if ($ENV{CPANSPEC_WRAP_BUILD_COMMAND}) {
+            $cmd = $ENV{CPANSPEC_WRAP_BUILD_COMMAND} =~ s/\$COMMAND\b/$cmd/r;
+        }
+        verbose("Running: $cmd");
         my $out = qx{cd $basedir/$path; $cmd 2>&1};
         if ($?) {
             warn "Error when running $cmd: >>$out<<\n";
@@ -1077,11 +1266,11 @@ for my $ofile (@args) {
             if ($dynamic_results) {
                 $summary //= $dynamic_results->{abstract};
                 # Add possible new requirements to existing static ones
-                my %newrequires = %{ $dynamic_results->{requires} };
+                my %newrequires = %{ $dynamic_results->{requires} || {} };
                 foreach my $dep (keys(%newrequires)) {
                     $requires{$dep} = $newrequires{$dep};
                 }
-                %newrequires = %{ $dynamic_results->{build_requires} };
+                %newrequires = %{ $dynamic_results->{build_requires} || {} };
                 foreach my $dep (keys(%newrequires)) {
                     if (defined $build_requires{$dep}) {
                         next if version->parse($build_requires{$dep}) > version->parse($newrequires{$dep});
@@ -1111,12 +1300,13 @@ for my $ofile (@args) {
     if (not length $summary) {
         $summary = "$module Perl module";
     }
+    $summary = encode_utf8 $summary;
 
     $stats{provides} = keys %provides;
     dump_statistics($module, $version, \%stats);
     unless (%provides) {
         verbose("No 'provides' info in meta, parsing code.\n");
-        %provides = parse_provides($basedir . $path, \@files);
+        %provides = parse_provides($basedir . $path, \@files, \%no_index);
     }
 
     delete @build_requires{ keys %provides };
@@ -1126,7 +1316,14 @@ for my $ofile (@args) {
     }
 
     rmtree($basedir);
-    my $rpm_version = map_version($module, $version);
+    my $normalized = 0;
+    $version =~ s/^v// unless $dlp;
+    my $rpm_version = map_version(dist => 1, $name, $version, \$normalized);
+    my $diff_package_version = $rpm_version ne $version;
+    my $normal = 0;
+    if ($diff_package_version and $rpm_version =~ m/^\d+\.\d+\./) {
+        $normal = 1;
+    }
     my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
     $year += 1900;
 
@@ -1158,13 +1355,19 @@ Name:           $prefix$name
 Version:        $rpm_version
 Release:        $release
 END
-
-    if ($rpm_version ne $version) {
-        print $spec "%define cpan_version $version\n";
-        $version_string = '%{cpan_version}';
-        print $spec "Provides:  perl($module) = $rpm_version\n";
+    if (defined $config->{epoch}) {
+        print $spec <<"END";
+Epoch:          $config->{epoch}
+END
     }
 
+    if ($rpm_version ne $version) {
+        if ($normalized) {
+            print $spec "# $version -> normalize -> $rpm_version\n";
+        }
+        print $spec "%define cpan_version $version\n";
+        $version_string = '%{cpan_version}';
+    }
     print $spec "Epoch:          $epoch\n" if (defined($epoch));
     if ($config->{license}) {
         if($config->{license} =~ /^Perl( License)?$/i) {
@@ -1250,12 +1453,16 @@ END
             }
         }
         if (defined $build_requires{$dep}) {
+            my $mapped;
             if ($config->{ignored_requires}->{$dep}) {
-	      printf $spec "#";
+                printf $spec "#";
+                $mapped //= map_version(module => 0, $dep, $build_requires{$dep});
             }
             printf $spec "%-16s%s", "BuildRequires:", "perl($dep)";
-            print $spec (" >= " . map_version($dep, $build_requires{$dep}))
-              if ($build_requires{$dep});
+            if ($build_requires{$dep}) {
+                $mapped //= map_version(module => 0, $dep, $build_requires{$dep});
+                print $spec " >= $mapped";
+            }
             print $spec "\n";
         }
     }
@@ -1266,11 +1473,16 @@ END
 
     for my $dep (sort(keys(%requires))) {
         next if (is_in_core($dep, $requires{$dep}));
+        my $mapped;
         if ($config->{ignored_requires}->{$dep}) {
            printf $spec "#";
+           $mapped = $requires{$dep};
         }
         printf $spec "%-16s%s", "Requires:", "perl($dep)";
-        print $spec (" >= " . map_version($dep, $requires{$dep})) if ($requires{$dep});
+        if ($requires{$dep}) {
+            $mapped //= map_version(module => 0, $dep, $requires{$dep});
+            print $spec " >= $mapped";
+        }
         print $spec "\n";
     }
 
@@ -1278,15 +1490,49 @@ END
         printf $spec "%-16s%s\n", "Requires:", $dep;
     }
 
-
     for my $prov (@add_provides) {
         printf $spec "%-16s%s\n", "Provides:", $prov;
+    }
+    if ($dlp and ($normal or $diff_package_version)) {
+        # only generate our own if package version is normal and there are no
+        # other provided modules with different versions
+        my $spec_provides = '';
+        my $diff_version = 0;
+
+        for my $package (sort keys %provides) {
+            my $line = '';
+            if ($config->{ignored_provides}->{$package}) {
+                $line .= "#";
+            }
+            my $version = $provides{ $package }->{version};
+            my $prov = "perl($package)";
+            if ($version) {
+                my $prov_rpm_version = map_version(module => 1, $package, $version);
+                $version =~ s/^v//;
+                $diff_version = 1 if $prov_rpm_version ne $version;
+                if ($rpm_version eq $prov_rpm_version) {
+                    $prov .= " = %{version}";
+                }
+                else {
+                    $prov .= " = $prov_rpm_version";
+                }
+            }
+            $line .= sprintf "%-16s%s\n", "Provides:", $prov;
+            $spec_provides .= $line;
+        }
+        if ($diff_version) {
+            print $spec $spec_provides;
+            print $spec "%undefine       __perllib_provides\n";
+        }
     }
     for my $dep (sort(keys(%recommends))) {
         next if (is_in_core($dep, $recommends{$dep}));
         next if ($dep eq 'perl');
         printf $spec "%-16s%s", "Recommends:", "perl($dep)";
-        print $spec (" >= " . $recommends{$dep}) if ($recommends{$dep});
+        if ($recommends{$dep}) {
+            my $mapped = map_version(module => 0, $dep, $recommends{$dep});
+            print $spec " >= $mapped";
+        }
         print $spec "\n";
     }
 
@@ -1315,7 +1561,7 @@ END
     my $buildpath = $path;
     $buildpath =~ s/$name/\%{cpan_name}/;
     $buildpath =~ s/$version/$version_string/;
-    print $spec <<END;
+    print $spec encode_utf8(<<END);
 
 \%description
 $description
@@ -1324,7 +1570,7 @@ $description
 END
 
     print $spec <<END;
-\%autosetup @{[($noprefix ? "" : " -n $buildpath")]} $patches->{autosetup_args}
+\%autosetup @{[($noprefix ? "" : "-n $buildpath")]} $patches->{autosetup_args}
 
 END
 
@@ -1463,20 +1709,21 @@ END
     print $spec "\%files -f \%{name}.files\n";
 
     if (%hdoc) {
-	my (@ldoc, @hdoc);
-	for my $f (keys %hdoc) {
-	    if (is_license_file($f)) {
-		push(@ldoc, $f);
-	    } else {
-		push(@hdoc, $f);
-	    }
-	}
-	if (@hdoc) {
-	    print $spec "%doc " . join(' ', sort(@hdoc)) . "\n";
-	}
-	if (@ldoc) {
-	    print $spec "%license " . join(' ', sort(@ldoc)) . "\n";
-	}
+        my (@ldoc, @hdoc);
+        for my $f (keys %hdoc) {
+            if (is_license_file($f)) {
+                push(@ldoc, $f);
+            }
+            else {
+                push(@hdoc, $f);
+            }
+        }
+        if (@hdoc) {
+            print $spec "%doc " . join(' ', sort(@hdoc)) . "\n";
+        }
+        if (@ldoc) {
+            print $spec "%license " . join(' ', sort(@ldoc)) . "\n";
+        }
     }
 
     if ($scripts) {
@@ -1518,8 +1765,14 @@ END
         binmode $tfh, ':encoding(UTF-8)';
         my $cltxt = "";
 
+        my $updated_to = $version;
+        if ($rpm_version ne $version) {
+            if ($normalized) {
+                $updated_to = "$rpm_version ($version)";
+            }
+        }
         if (-f $changelogfile) {
-            my $txt = "- updated to $version\n   see $defaultdocdir/$basename/$changesfile\n\n";
+            my $txt = "- updated to $updated_to\n   see $defaultdocdir/$basename/$changesfile\n\n";
             $cltxt .= $txt;
             if ($old_file && $changes) {
                 my $old_changes = extract_old_changes($old_file, $changesfile);
@@ -1541,7 +1794,7 @@ END
             }
         }
         else {
-            $cltxt .= "- initial package $version\n * created by $NAME $VERSION";
+            $cltxt .= "- initial package $updated_to\n * created by $NAME $VERSION";
         }
         $cltxt .= "\n"; # ensure line termination
         $cltxt =~ s/\n+$/\n/; # drop multi-lines at the end, osc adds one again
@@ -1578,7 +1831,7 @@ sub process_patches {
             push @patch_sources, "# $1";
         }
         push @patch_sources, "Patch$counter:   $patch";
-        next if $all_patch_args_same;
+        $counter++, next if $all_patch_args_same;
 
         if (length $args) {
             push @patches, "%patch -P$counter $args";
@@ -1597,7 +1850,7 @@ sub prereqs_from_metayaml {
 
     if ($meta->{provides}) {
         for my $pkg (keys %{ $meta->{provides} || {} }) {
-            $provides{ $pkg } = 1;
+            $provides{ $pkg } = $meta->{provides}->{ $pkg };
         }
     }
 
@@ -1628,7 +1881,7 @@ sub prereqs_from_metajson {
     my (%provides, %build, %run, %rec);
     if ($metajson->{provides}) {
         for my $pkg (keys %{ $metajson->{provides} || {} }) {
-            $provides{ $pkg } = 1;
+            $provides{ $pkg } = $metajson->{provides}->{ $pkg };
         }
     }
 
@@ -1657,17 +1910,41 @@ sub prereqs_from_metajson {
 }
 
 sub parse_provides {
-    my ($path, $files) = @_;
+    my ($path, $files, $no_index) = @_;
     my %provides;
-    foreach my $test (grep /\.(pm|t|PL|pl)/, @$files) {
-        my $doc = PPI::Document->new($path . "/" . $test);
+    TEST: foreach my $test (grep /\.(pm|t|PL|pl)/, @$files) {
+        next unless $test =~ m{\.pm$};
+        if (keys %$no_index) {
+            # If a module provides a list of things to not index, we can
+            # index everything else.
+            # https://metacpan.org/pod/CPAN::Meta::Spec#no_index
+            if (my $dirs = $no_index->{directory}) {
+                for my $dir (@$dirs) {
+                    next TEST if $test =~ m/^\Q$dir/;
+                }
+            }
+        }
+        else {
+            next unless $test =~ m{^(([^/]+\.pm)|(lib/.*\.pm$))};
+        }
+        my $doc = PPI::Document->new("$path/$test");
 
         next unless ($doc);
 
         # Get the name of the main package
         my $pkg = $doc->find_first('PPI::Statement::Package');
         if ($pkg) {
-            $provides{$pkg->namespace} = 1;
+            my $ns = $pkg->namespace;
+            my $version = $pkg->version;
+            unless ($version) {
+                my $prov = find_version_statements("$path/$test");
+                for my $key (keys %$prov) {
+                    $provides{ $key } = { file => $test, version => $prov->{ $key } };
+                }
+            }
+            else {
+                $provides{$ns} = { file => $test, version => $version };
+            }
         }
 
     }
@@ -1727,6 +2004,7 @@ sub read_meta_json {
     if ($metajson->{abstract}) {
         $stats->{abstract}->{metajson} = $metajson->{abstract};
     }
+    $results{version} = $metajson->{version};
 
     return \%results;
 }
@@ -1734,13 +2012,16 @@ sub read_meta_json {
 sub read_meta_yaml {
     $debug and warn __PACKAGE__.':'.__LINE__.": =============== read_meta_yaml\n";
     my ($file, $stats) = @_;
-    my $yml = readfile($file);
-    my $meta = eval { YAML::XS::Load($yml); };
+    my $yaml = readfile($file);
+    # Some META.yml files have invalid unicode. CPAN::Meta::YAML seems to
+    # not care, YAML::XS dies
+    my $meta = eval { CPAN::Meta::YAML->read_string($yaml) };
     if ($@) {
         warn "Error parsing $file: $@";
         $stats->{metayaml} = 'error';
         return;
     }
+    $meta = $meta->[0];
     my %results = ( dynamic => 1 );
     $stats->{metayaml} = 1;
     if (exists $meta->{dynamic_config} and not $meta->{dynamic_config}) {
@@ -1829,6 +2110,9 @@ sub read_meta_yaml {
         }
     }
     $results{license} = $license;
+    $results{version} = $meta->{version};
+    $results{no_index} = $meta->{no_index};
+    $stats->{no_index} = $meta->{no_index};
     return \%results;
 }
 
@@ -1873,6 +2157,7 @@ sub find_doc {
             and !/^perlcritic/
             and !/^perltidy/
             and !/\.tar\./
+            and !/^#/
             and !/~$/
             and !$doskip->($_)
         } @files;
@@ -1944,6 +2229,139 @@ sub filter_provides {
         }
     }
     print $sh "\n";
+}
+
+# copied from https://github.com/rpm-software-management/rpm/blob/master/scripts/perl.prov
+# and modernized a bit
+sub find_version_statements {
+    my ($file) = @_;
+    my %provides;
+
+    open my $fh, '<', $file or die "Could not open file '$file' for reading: $!\n";
+
+    my ($package, $version, $incomment, $inover, $inheredoc);
+
+    while (<$fh>) {
+
+        # Skip contents of HEREDOCs
+        if (defined $inheredoc) {
+            # We're in a HEREDOC; continue until the end of it
+            if (m/^$inheredoc\s*$/) {
+                $inheredoc = undef;
+            }
+            next;
+        }
+
+        # skip the documentation
+
+        # we should not need to have item in this if statement (it
+        # properly belongs in the over/back section) but people do not
+        # read the perldoc.
+
+        if (m/^=(head[1-4]|pod|for|item)/) {
+            $incomment = 1;
+        }
+        if (m/^=(cut)/) {
+            $incomment = 0;
+            $inover = 0;
+        }
+        if (m/^=(over)/) {
+            $inover = 1;
+        }
+        if (m/^=(back)/) {
+            $inover = 0;
+        }
+        if ($incomment || $inover || m/^\s*#/) {
+            next;
+        }
+        # skip the data section
+        if (m/^__(DATA|END)__$/) {
+            last;
+        }
+
+        # Find the start of a HEREDOC
+        if (m/<<\s*[\"\'](\w+)[\"\']\s*;\s*$/) {
+            $inheredoc = $1;
+        }
+
+        # not everyone puts the package name of the file as the first
+        # package name so we report all namespaces except some common
+        # false positives as if they were provided packages (really ugly).
+        if (m/^\s*package\s+([_:a-zA-Z0-9]+)\s*(?:v?([0-9_.]+)\s*)?[;\{]/) {
+            $package = $1;
+            $version = $2;
+            if ($package eq 'main') {
+                undef $package;
+            }
+            else {
+                # If $package already exists in the %provides hash, it means
+                # the package definition is broken up over multiple blocks.
+                # In that case, don't stomp a previous $VERSION we might have
+                # found.  (See BZ#214496.)
+                $provides{$package} = $version unless (exists $provides{$package});
+            }
+        }
+
+        # after we found the package name take the first assignment to
+        # $VERSION as the version number. Exporter requires that the
+        # variable be called VERSION so we are safe.
+
+        # here are examples of VERSION lines from the perl distribution
+
+        #FindBin.pm:$VERSION = $VERSION = sprintf("%d.%02d", q$Revision: 1.9 $ =~ /(\d+)\.(\d+)/);
+        #ExtUtils/Install.pm:$VERSION = substr q$Revision: 1.9 $, 10;
+        #CGI/Apache.pm:$VERSION = (qw$Revision: 1.9 $)[1];
+        #DynaLoader.pm:$VERSION = $VERSION = "1.03";     # avoid typo warning
+        #General.pm:$Config::General::VERSION = 2.33;
+        #
+        # or with the new "our" pragma you could (read will) see:
+        #
+        #    our $VERSION = '1.00'
+        if ($package && m/^\s*(our\s+)?\$(\Q$package\E::)?VERSION\s*=\s+/) {
+
+        # first see if the version string contains the string
+        # '$Revision' this often causes bizarre strings and is the most
+        # common method of non static numbering.
+
+            if (m/\$Revision: (\d+[.0-9]+)/) {
+                $version = $1;
+            }
+            elsif (m/=\s*['"]?(\d+[._0-9]+)['"]?/) {
+
+                # look for a static number hard coded in the script
+
+                $version = $1;
+            }
+            $provides{$package} = $version;
+        }
+
+        # Allow someone to have a variable that defines virtual packages
+        # The variable is called $RPM_Provides.  It must be scoped with
+        # "our", but not "local" or "my" (just would not make sense).
+        #
+        # For instance:
+        #
+        #     $RPM_Provides = "blah bleah"
+        #
+        # Will generate provides for "blah" and "bleah".
+        #
+        # Each keyword can appear multiple times.  Don't
+        #  bother with datastructures to store these strings,
+        #  if we need to print it print it now.
+
+        if (m/^\s*(our\s+)?\$RPM_Provides\s*=\s*["'](.*)['"]/i) {
+            foreach $_ (split(/\s+/, $2)) {
+                print "$_\n";
+            }
+        }
+
+    }
+
+    if (defined $inheredoc) {
+        die "Unclosed HEREDOC [$inheredoc] in file: '$file'\n";
+    }
+
+    return \%provides;
 }
 
 # vi: set ai et:
