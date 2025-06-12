@@ -44,7 +44,6 @@ CPAN-Meta-Requirements	2.143000	CPAN::Meta::Requirements	2.143000
 CPAN-Meta-Requirements	2.143000	CPAN::Meta::Requirements::Range	2.143000
 CPAN-Mini	1.111016	CPAN::Mini	1.111016
 CPAN-Mini	1.111016	CPAN::Mini::App	1.111016
-CPAN-Perl-Releases	5.20230703	CPAN::Perl::Releases	5.20230703
 CPAN-Uploader	0.103018	CPAN::Uploader	0.103018
 Crypt-DH-GMP	0.00012	Crypt::DH::GMP	0.00012
 Crypt-DH-GMP	0.00012	Crypt::DH::GMP::Compat	undef
